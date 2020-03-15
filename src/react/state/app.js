@@ -10,11 +10,16 @@ var slice = createSlice({
   initialState: {
     ready: false,
     apiKey: undefined,
+    folder: undefined,
   },
   reducers: {
     setApiKey(state, { payload }) {
       if (payload === undefined || payload === null || payload === "null") return state;
       state.apiKey = payload;
+    },
+    setFolder(state, { payload }) {
+      if (payload === undefined || payload === null || payload === "null") return state;
+      state.folder = payload;
     },
     ready(state) {
       state.ready = true;
@@ -24,13 +29,14 @@ var slice = createSlice({
 /**
  * ACTIONS
  */
-export var { setApiKey, ready } = slice.actions;
+export var { setApiKey, setFolder, ready } = slice.actions;
 export var init = createAction('app/init');
 /**
  * SELECTORS
  */
 export var readySelector = state => state.app.ready;
 export var apiKeySelector = state => state.app.apiKey;
+export var folderSelector = state => state.app.folder;
 /**
  * EPICS
  */
@@ -38,6 +44,7 @@ var initEpic = action$ => action$.pipe(
   ofType(init.toString()),
   switchMap(() => from([
     setApiKey(localStorage.getItem('apiKey')),
+    setFolder(localStorage.getItem('folder')),
     ready(),
   ]))
 );
@@ -48,7 +55,13 @@ var saveApiKeyEpic = action$ => action$.pipe(
   ignoreElements(),
 );
 
-export var epic = combineEpics(initEpic, saveApiKeyEpic);
+var saveFolderEpic = action$ => action$.pipe(
+  ofType(setFolder.toString()),
+  tap(({payload}) => window.localStorage.setItem('folder', payload)),
+  ignoreElements(),
+);
+
+export var epic = combineEpics(initEpic, saveApiKeyEpic, saveFolderEpic);
 /**
  * DEFAULT EXPORT
  */
