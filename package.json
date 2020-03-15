@@ -6,12 +6,17 @@
   "main": "electron/main.js",
   "homepage": "./",
   "dependencies": {
+    "@reduxjs/toolkit": "^1.2.5",
     "@testing-library/jest-dom": "^4.2.4",
     "@testing-library/react": "^9.3.2",
     "@testing-library/user-event": "^7.1.2",
     "react": "^16.13.0",
     "react-dom": "^16.13.0",
-    "react-scripts": "3.4.0"
+    "react-redux": "^7.2.0",
+    "react-scripts": "3.4.0",
+    "redux": "^4.0.5",
+    "redux-observable": "^1.2.0",
+    "rxjs": "^6.5.4"
   },
   "scripts": {
     "start-electron": "export ELECTRON_START_URL=http://localhost:3000 && electron .",
@@ -39,7 +44,8 @@
   },
   "devDependencies": {
     "electron": "^8.1.1",
-    "electron-builder": "^22.4.1"
+    "electron-builder": "^22.4.1",
+    "electron-devtools-installer": "^2.2.4"
   },
   "build": {
     "files": [
