@@ -1,17 +1,27 @@
 import React from 'react';
-import { useDispatch } from 'react-redux';
+import { Flex, Spinner } from '@chakra-ui/core';
+import { useDispatch, useSelector } from 'react-redux';
 
-import { ping } from '../state/courses.js';
+import { init, readySelector, apiKeySelector } from '../state/app.js';
+import ApiKeyForm from './ApiKeyForm/';
 
 function Main() {
   var dispatch = useDispatch();
+  var ready = useSelector(readySelector);
+  var apiKey = useSelector(apiKeySelector);
 
   React.useEffect(() => {
-    dispatch(ping());
+    dispatch(init());
   }, [dispatch]);
 
+  if (ready === false) return <Flex minH="100vh" align="center" justify="center"><Spinner /></Flex>
+
+  if (apiKey === undefined) return (
+    <Flex><ApiKeyForm /></Flex>
+  )
+
   return (
-    <div className="Main"></div>
+    <Flex className="Main"></Flex>
   );
 }
 

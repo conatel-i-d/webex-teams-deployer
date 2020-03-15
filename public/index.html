@@ -26,6 +26,16 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>Webex Teams Deployer</title>
+    <script>
+      // Open all links in external browser
+      let shell = require('electron').shell
+      document.addEventListener('click', function (event) {
+        if (event.target.tagName === 'A' && event.target.href.startsWith('http')) {
+          event.preventDefault()
+          shell.openExternal(event.target.href)
+        }
+      });
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
