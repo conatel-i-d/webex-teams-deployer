@@ -4,7 +4,7 @@ import sortBy from 'lodash/sortBy';
 import find from 'lodash/find';
 import get from 'lodash/get';
 import { of, concat } from 'rxjs';
-import { map, tap, mergeMap, takeUntil, catchError } from 'rxjs/operators';
+import { switchMap, map, mergeMap, takeUntil, catchError } from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
 const parse = require('csv-parse/lib/sync')
 
@@ -39,10 +39,10 @@ var slice = createSlice({
       state.flags = { ...state.flags, ...payload.flags };
       state.names = payload.names;
     },
-    requestError(state, { payload: { message, flags } }) {
-      state.errorMessage = message;
-      state.flags = { ...state.flags, ...flags };
-      state.error = false
+    requestError(state, { payload }) {
+      state.errorMessage = payload.message;
+      state.flags = { ...state.flags, ...payload.flags };
+      console.log(payload);
     }
   }
 });
@@ -52,8 +52,9 @@ var slice = createSlice({
 export var { setCourses, requestError, setFlags, refreshAllCoursesIds } = slice.actions;
 export var loadCourses = createAction('courses/loadCourses');
 export var refresh = createAction('courses/refresh');
-export var cancel = createAction('courses/cancel');
 export var refreshAll = createAction('courses/refreshAll');
+export var create = createAction('courses/create');
+export var cancel = createAction('courses/cancel');
 /**
  * SELECTORS
  */
@@ -67,6 +68,7 @@ export var coursesSelector = createSelector(namesSelector, professorsSelector, s
     nombre_curso,
     year: 2020,
     isRefreshing: get(flags, 'courses.refreshAll', false) || get(flags, `courses.${ nombre_curso }.refresh`, false),
+    isCreating: get(flags, 'courses.createAll', false) || get(flags, `courses.${ nombre_curso }.create`, false),
     members: [
       ...professors.filter(professor => professor.nombre_curso === nombre_curso),
       ...students.filter(student => student.nombre_curso === nombre_curso)
@@ -79,7 +81,7 @@ export var isRefreshingAllSelector = state => get(state, 'courses.flags.courses.
  */
 var refreshAllEpic = (action$, state$) => action$.pipe(
   ofType(refreshAll.toString()),
-  mergeMap(({payload}) => {
+  mergeMap(() => {
     return webexAjax({
       method: 'GET',
       entity: 'teams',
@@ -112,45 +114,31 @@ var refreshAllEpic = (action$, state$) => action$.pipe(
       },
     })
   }),
-  tap(result => console.log(result)),
 );
 
 var refreshEpic = (action$, state$) => action$.pipe(
   ofType(refresh.toString()),
   mergeMap(({payload}) => {
-    return webexAjax({
-      method: 'GET',
-      entity: 'teams',
-      state: state$.value,
-      query: {
-        max: 1000
-      },
-      request() {
-        return setFlags({ flags: { courses: { [payload.nombre_curso]: { refresh: true } } } });
-      },
-      cancel() {
-        return takeUntil(action$.pipe(ofType(cancel.toString())))
-      },
-      success({ data }) {
-        var item = find(data.items, item => item.name === payload.nombre_curso);
-        return refreshAllCoursesIds({
-          names: state$.value.courses.names.map(course => {
-            return course.nombre_curso === payload.nombre_curso
-              ? { ...course, id: item.id }
-              : course;
-          }),
-          flags: { courses: { [payload.nombre_curso]: { refresh: false } } }
-        })
-      },
-      error(error) {
-        return requestError({
-          ...error,
-          flags: { courses: { [payload.nombre_curso]: { refresh: false } } },
-        })
-      },
-    })
+    return refreshAjax$(action$, state$, payload)
   }),
-  tap(result => console.log(result)),
+);
+
+var createEpic = (action$, state$) => action$.pipe(
+  ofType(create.toString()),
+  switchMap(({payload}) => {
+    return refreshAjax$(action$, state$, payload).pipe(
+      switchMap((action) => {
+        if (action.type !== refreshAllCoursesIds.toString()) return of(action);
+        var course = find(action.payload.names, name => name.nombre_curso === payload.nombre_curso);
+        console.log(course);
+        if (course && course.id) return of(action);
+        return concat(
+          of(action),
+          createAjax$(action$, state$, payload)
+        );
+      })
+    )
+  }),
 );
 
 var loadCoursesEpic = (action$, state$) => action$.pipe(
@@ -167,7 +155,7 @@ var loadCoursesEpic = (action$, state$) => action$.pipe(
   })
 );
 
-export var epic = combineEpics(refreshAllEpic, refreshEpic, loadCoursesEpic);
+export var epic = combineEpics(createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
 /**
  * FUNCTIONS
  */
@@ -178,7 +166,86 @@ function readFile(fileName, columns) {
   });
 }
 
-function webexAjax({state, entity, entityId, query, method, body, success, error, cancel, request}) {
+function createAjax$(action$, state$, payload) {
+  console.log(find(state$.value.courses.names, course => course.nombre_curso === payload.nombre_curso))
+  return webexAjax({
+    method: 'POST',
+    entity: 'teams',
+    state: state$.value,
+    body: {
+      name: payload.nombre_curso
+    },
+    request() {
+      return setFlags({ flags: { courses: { [payload.nombre_curso]: { create: true } } } });
+    },
+    cancel() {
+      return takeUntil(action$.pipe(ofType(cancel.toString())))
+    },
+    success({ data }) {
+      return refreshAllCoursesIds({
+        names: state$.value.courses.names.map(course => {
+          return course.nombre_curso === payload.nombre_curso
+            ? { ...course, id: data.id }
+            : course;
+        }),
+        flags: { courses: { [payload.nombre_curso]: { create: false } } }
+      })
+    },
+    error(error) {
+      return requestError({
+        ...error,
+        flags: { courses: { [payload.nombre_curso]: { create: false } } },
+      })
+    },
+  })
+}
+
+function refreshAjax$(action$, state$, payload) {
+  return webexAjax({
+    method: 'GET',
+    entity: 'teams',
+    state: state$.value,
+    query: {
+      max: 1000
+    },
+    request() {
+      return setFlags({ flags: { courses: { [payload.nombre_curso]: { refresh: true } } } });
+    },
+    cancel() {
+      return takeUntil(action$.pipe(ofType(cancel.toString())))
+    },
+    success({ data }) {
+      var item = find(data.items, item => item.name === payload.nombre_curso);
+      return refreshAllCoursesIds({
+        names: state$.value.courses.names.map(course => {
+          return item !== undefined && course.nombre_curso === payload.nombre_curso
+            ? { ...course, id: item.id }
+            : course;
+        }),
+        flags: { courses: { [payload.nombre_curso]: { refresh: false } } }
+      })
+    },
+    error(error) {
+      return requestError({
+        ...error,
+        flags: { courses: { [payload.nombre_curso]: { refresh: false } } },
+      })
+    },
+  });
+}
+
+function webexAjax({
+  state,
+  entity,
+  entityId,
+  query,
+  method,
+  body,
+  success,
+  error,
+  cancel,
+  request,
+}) {
   return concat(
     of(request()),
     ajax({
@@ -196,7 +263,10 @@ function webexAjax({state, entity, entityId, query, method, body, success, error
         statusCode: res.status,
         data: res.response
       })),
-      catchError((err) => of(error(err)))
+      catchError((err) => {
+        console.error(err);
+        return of(error(err));
+      })
     )
   );
 }

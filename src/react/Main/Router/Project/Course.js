@@ -9,10 +9,10 @@ import {
   Flex,
   IconButton,
 } from '@chakra-ui/core';
-import { FaRetweet } from 'react-icons/fa';
+import { FaRetweet, FaPlus } from 'react-icons/fa';
 
 import Member from './Member.js';
-import { refresh } from '../../../state/courses.js';
+import { refresh, create } from '../../../state/courses.js';
 
 function Course({course}) {
   var dispatch = useDispatch();
@@ -25,7 +25,12 @@ function Course({course}) {
   var handleRefresh = React.useCallback((e) => {
     e.stopPropagation();
     dispatch(refresh(course))
-  }, [dispatch, course])
+  }, [dispatch, course]);
+
+  var handleCreate = React.useCallback((e) => {
+    e.stopPropagation();
+    dispatch(create(course))
+  }, [dispatch, course]);
 
   return (
     <Box p={"1em"} shadow="lg" mb="1em" border="1px solid whitesmoke" onClick={toggleCollapse} cursor="pointer">
@@ -38,7 +43,8 @@ function Course({course}) {
           {course.nombre_curso}
         </Heading>
         <Flex align="center">
-          <IconButton isDisabled={course.id !== undefined} isLoading={course.isRefreshing} onClick={handleRefresh} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="teal" icon={FaRetweet} />
+          <IconButton isDisabled={course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleRefresh} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="teal" icon={FaRetweet} />
+          <IconButton ml="0.5em" isDisabled={course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleCreate} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="orange" icon={FaPlus} />
         </Flex>
       </Flex>
       <Grid templateColumns="repeat(2, 1fr)" gap={1}>
