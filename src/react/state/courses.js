@@ -35,17 +35,9 @@ var slice = createSlice({
     setFlags(state, { payload }) {
       state.flags = { ...state.flags, ...payload.flags };
     },
-    refreshCourseId(state, { payload }) {
-      state.flags = { ...state.flags, ...payload.flags }
-      if (payload.item !== undefined) {
-        var { id } = payload.item;
-        var { nombre_curso } = payload.course;
-        state.names = state.names.map(course => {
-          if (course.nombre_curso === nombre_curso)
-            course.id = id;
-          return course;
-        });
-      }
+    refreshAllCoursesIds(state, { payload }) {
+      state.flags = { ...state.flags, ...payload.flags };
+      state.names = payload.names;
     },
     requestError(state, { payload: { message, flags } }) {
       state.errorMessage = message;
@@ -57,10 +49,11 @@ var slice = createSlice({
 /**
  * CUSTOM ACTIONS
  */
-export var { setCourses, requestError, setFlags, refreshCourseId } = slice.actions;
+export var { setCourses, requestError, setFlags, refreshAllCoursesIds } = slice.actions;
 export var loadCourses = createAction('courses/loadCourses');
 export var refresh = createAction('courses/refresh');
 export var cancel = createAction('courses/cancel');
+export var refreshAll = createAction('courses/refreshAll');
 /**
  * SELECTORS
  */
@@ -73,16 +66,55 @@ export var coursesSelector = createSelector(namesSelector, professorsSelector, s
     id,
     nombre_curso,
     year: 2020,
-    isRefreshing: get(flags, `courses.${ nombre_curso }.refresh`),
+    isRefreshing: get(flags, 'courses.refreshAll', false) || get(flags, `courses.${ nombre_curso }.refresh`, false),
     members: [
       ...professors.filter(professor => professor.nombre_curso === nombre_curso),
       ...students.filter(student => student.nombre_curso === nombre_curso)
     ]
   }))
-})
+});
+export var isRefreshingAllSelector = state => get(state, 'courses.flags.courses.refreshAll', false)
 /**
  * EPICS
  */
+var refreshAllEpic = (action$, state$) => action$.pipe(
+  ofType(refreshAll.toString()),
+  mergeMap(({payload}) => {
+    return webexAjax({
+      method: 'GET',
+      entity: 'teams',
+      state: state$.value,
+      query: {
+        max: 1000
+      },
+      request() {
+        return setFlags({ flags: { courses: { refreshAll: true } } });
+      },
+      cancel() {
+        return takeUntil(action$.pipe(ofType(cancel.toString())))
+      },
+      success({ data }) {
+        return refreshAllCoursesIds({
+          names: state$.value.courses.names.map(course => {
+            var item = find(data.items, item => item.name === course.nombre_curso);
+            return item !== undefined
+              ? { ...course, id: item.id }
+              : course;
+          }),
+          flags: { courses: { refreshAll: false } }
+        })
+      },
+      error(error) {
+        return requestError({
+          ...error,
+          flags: { courses: { refreshAll: false } },
+        })
+      },
+    })
+  }),
+  tap(result => console.log(result)),
+);
+
 var refreshEpic = (action$, state$) => action$.pipe(
   ofType(refresh.toString()),
   mergeMap(({payload}) => {
@@ -100,9 +132,13 @@ var refreshEpic = (action$, state$) => action$.pipe(
         return takeUntil(action$.pipe(ofType(cancel.toString())))
       },
       success({ data }) {
-        return refreshCourseId({
-          course: payload,
-          item: find(data.items, item => item.name === payload.nombre_curso),
+        var item = find(data.items, item => item.name === payload.nombre_curso);
+        return refreshAllCoursesIds({
+          names: state$.value.courses.names.map(course => {
+            return course.nombre_curso === payload.nombre_curso
+              ? { ...course, id: item.id }
+              : course;
+          }),
           flags: { courses: { [payload.nombre_curso]: { refresh: false } } }
         })
       },
@@ -115,7 +151,7 @@ var refreshEpic = (action$, state$) => action$.pipe(
     })
   }),
   tap(result => console.log(result)),
-)
+);
 
 var loadCoursesEpic = (action$, state$) => action$.pipe(
   ofType(loadCourses.toString()),
@@ -131,7 +167,7 @@ var loadCoursesEpic = (action$, state$) => action$.pipe(
   })
 );
 
-export var epic = combineEpics(refreshEpic, loadCoursesEpic);
+export var epic = combineEpics(refreshAllEpic, refreshEpic, loadCoursesEpic);
 /**
  * FUNCTIONS
  */
