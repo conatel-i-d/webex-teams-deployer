@@ -28,7 +28,7 @@ var TABS_ACTIVE_STYLE = {
 
 function Router() {
   return (
-    <Tabs isFitted variant="unstyled" defaultIndex={1}>
+    <Tabs isFitted variant="unstyled">
       <TabList>
         <Tab border="1px solid white" borderBottom="2px solid whitesmoke" _selected={TABS_SELECTED_STYLE} _active={TABS_ACTIVE_STYLE}>Proyecto</Tab>
         <Tab border="1px solid white" borderBottom="2px solid whitesmoke" _selected={TABS_SELECTED_STYLE} _active={TABS_ACTIVE_STYLE}>Playground</Tab>
