@@ -10,25 +10,34 @@ import {
   Alert,
   AlertTitle,
   AlertIcon,
-  AlertDescription
+  AlertDescription,
+  useToast,
 } from '@chakra-ui/core';
 import { FaFolderOpen } from 'react-icons/fa';
-import { useDispatch } from 'react-redux';
-import { setApiKey, setFolder } from '../../state/app.js';
+import { useDispatch, useSelector } from 'react-redux';
+import { setApiKey, setFolder, apiKeySelector, folderSelector } from '../../state/app.js';
 
 var { dialog } = window;
 
 
-function AppSettings() {
+function AppSettings({bg="whitesmoke", alert=true, full=true}) {
   var dispatch = useDispatch();
-  var [apiKey, setApiKeyState] = React.useState('');
-  var [folder, setFolderState] = React.useState('');
+  var toast = useToast();
+  var [apiKey, setApiKeyState] = React.useState(useSelector(apiKeySelector));
+  var [folder, setFolderState] = React.useState(useSelector(folderSelector));
   
   var handleSubmit = React.useCallback((e) => {
     e.preventDefault();
     dispatch(setApiKey(apiKey));
     dispatch(setFolder(folder));
-  }, [dispatch, apiKey, folder]);
+    toast({
+      title: "Configuración guardada.",
+      description: "Datos guardados con exito.",
+      status: "success",
+      duration: 5000,
+      isClosable: true,
+    });
+  }, [dispatch, apiKey, folder, toast]);
 
   var handleApiKeyChange = React.useCallback((e) => {
     setApiKeyState(e.target.value);
@@ -40,19 +49,18 @@ function AppSettings() {
       buttonLabel: 'Seleccionar carpeta',
       properties: ['openDirectory', 'createDirectory']
     });
-    if (selectedFolders.length === 0) return;
+    if (selectedFolders === undefined || selectedFolders.length === 0) return;
     var selectedFolder = selectedFolders[0];
-    console.log(selectedFolder);
     setFolderState(selectedFolder);
   }, [setFolderState]);
 
   return (
-    <Box height="100vh" width="100%" bg="whitesmoke" p="1em">
-      <Alert status="error" mb="1em" varian="subtle" flexDirection="column" justifyContent="center">
+    <Box height={full ? "100vh" : "100%"} width="100%" bg={bg} p="1em">
+      {alert && <Alert status="error" mb="1em" varian="subtle" flexDirection="column" justifyContent="center">
         <AlertIcon size="40px" mr={0} />
         <AlertTitle mt={4} mb={1} fontSize="lg">Configuración de Webex API Key y Carpeta del proyecto</AlertTitle>
         <AlertDescription>Esta configuración es necesaria antes de comenzar.</AlertDescription>
-      </Alert>
+      </Alert>}
 
       <form onSubmit={ handleSubmit }>
         <FormControl>

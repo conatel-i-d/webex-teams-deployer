@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { init, readySelector, apiKeySelector, folderSelector } from '../state/app.js';
 import AppSettings from './AppSettings/';
+import Router from './Router/';
 
 function Main() {
   var dispatch = useDispatch();
@@ -15,13 +16,11 @@ function Main() {
     dispatch(init());
   }, [dispatch]);
 
-  if (ready === false) return <Flex minH="100vh" align="center" justify="center"><Spinner /></Flex>
+  if (ready === false) return <Flex minH="100vh" align="center" justify="center"><Spinner /></Flex>;
 
-  if (apiKey === undefined || folder === undefined) return <AppSettings />
+  if (apiKey === undefined || folder === undefined) return <AppSettings />;
 
-  return (
-    <Flex className="Main"></Flex>
-  );
+  return <Router />;
 }
 
 export default Main;
