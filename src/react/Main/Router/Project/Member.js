@@ -10,6 +10,7 @@ function Member({ member }) {
     <>
       <Text w="100%" margin="0" borderBottom="1px solid #E2E8F0">{member.email}</Text>
       <Text w="100%" margin="0" borderBottom="1px solid #E2E8F0">{titleCase(member.name)}</Text>
+      <Text w="100%" textAlign="center" margin="0" borderBottom="1px solid #E2E8F0">{member.type}</Text>
     </>
   );
 }

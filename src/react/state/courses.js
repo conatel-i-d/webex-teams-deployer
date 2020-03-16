@@ -2,6 +2,7 @@ import { createSlice, createAction } from '@reduxjs/toolkit';
 import { combineEpics, ofType } from 'redux-observable';
 import { mapTo } from 'rxjs/operators';
 import range from 'lodash/range';
+import sortBy from 'lodash/sortBy';
 import { LoremIpsum } from "lorem-ipsum";
 /**
  * CONSTANTS
@@ -18,6 +19,7 @@ var lorem = new LoremIpsum({
 });
 
 var FACULTIES = ['diseño', 'ingeniería', 'postgrados', 'ciencias sociales'];
+var MEMBER_TYPES = ['P', 'A'];
 /**
  * SLICE
  */
@@ -55,10 +57,11 @@ function initialState(courses = 1000) {
     year: 2020,
     faculty: oneOf(FACULTIES),
     name: lorem.generateWords(randomInt(2, 6)),
-    members: range(randomInt(5, 30)).map(() => ({
+    members: sortBy(range(randomInt(5, 30)).map(() => ({
       name: randomName(),
       email: randomEmail(),
-    }))
+      type: oneOf(MEMBER_TYPES),
+    })), 'type').reverse()
   }));
 }
 

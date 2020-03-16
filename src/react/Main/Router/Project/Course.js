@@ -31,9 +31,10 @@ function Course({course}) {
         <Text w="100%" margin="0" textAlign="right">{`${course.members.length} Miembros`}</Text>
       </Grid>
       {isCollapseOpen && <Collapse mt="1em" isOpen={isCollapseOpen}>
-        <Grid templateRows={`repeat(${course.members.length + 1}, 1.5em)`} templateColumns="repeat(2, 1fr)" gap={1}>
+        <Grid templateRows={`repeat(${course.members.length + 1}, 1.5em)`} templateColumns="1fr 1fr 100px;" gap={1}>
           <Text w="100%" margin="0" fontWeight="bold" color="gray.600" borderBottom="1px solid black">Email</Text>
           <Text w="100%" margin="0" fontWeight="bold" color="gray.600" borderBottom="1px solid black">Nombre</Text>
+          <Text w="100px" margin="0" fontWeight="bold" color="gray.600" borderBottom="1px solid black" textAlign="center">Tipo</Text>
           {course.members.map((member, index) => (
             <Member key={`member-${index}`} member={member} />
           ))}
