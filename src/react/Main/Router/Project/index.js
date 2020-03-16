@@ -1,17 +1,28 @@
 import React from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   Stack,
+  Button,
 } from '@chakra-ui/core'
 
 import Course from './Course.js';
-import { coursesSelector } from '../../../state/courses.js';
+import { coursesSelector, loadCourses } from '../../../state/courses.js';
 
 function Project() {
+  var dispatch = useDispatch();
   var courses = useSelector(coursesSelector);
+
+  var handleOnLoadCourses = React.useCallback(() => (
+    dispatch(loadCourses())
+  ), [dispatch]);
+
+  console.log(courses);
 
   return (
     <Stack p="1em" spacing={8}>
+      <Stack isInline>
+        <Button variantColor="green" onClick={handleOnLoadCourses}>Cargar cursos</Button>
+      </Stack>
       {courses.map((course, index) => (
         <Course key={`course-${index}`} course={course} />
       ))}
