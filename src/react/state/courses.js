@@ -3,7 +3,7 @@ import { combineEpics, ofType } from 'redux-observable';
 import sortBy from 'lodash/sortBy';
 import find from 'lodash/find';
 import get from 'lodash/get';
-import { of, concat } from 'rxjs';
+import { of, concat, from } from 'rxjs';
 import { switchMap, map, mergeMap, takeUntil, catchError } from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
 import deepmerge from 'deepmerge';
@@ -16,6 +16,7 @@ var { fs } = window;
 var COURSES_COLUMNS = ['nombre_curso'];
 var PROFESSORS_COLUMNS = ['nombre_curso', 'codigo_persona', 'primer_apellido', 'segundo_apellido', 'email', 'P'];
 var STUDENTS_COLUMNS = ['nombre_curso', 'codigo_persona', 'primer_apellido', 'segundo_apellido', 'email', 'A']
+var PRIVATE_ROOM_TITLE = 'Docentes';
 /**
  * SLICE
  */
@@ -57,8 +58,12 @@ var slice = createSlice({
 export var { setCourses, requestError, setFlags, refreshAllCoursesIds } = slice.actions;
 export var loadCourses = createAction('courses/loadCourses');
 export var refresh = createAction('courses/refresh');
+export var refreshSuccess = createAction('courses/refresh/success');
 export var refreshAll = createAction('courses/refreshAll');
+export var refreshAllSuccess = createAction('courses/refreshAll/success');
 export var create = createAction('courses/create');
+export var createSuccess = createAction('courses/create/success');
+export var createRoomsSuccess = createAction('courses/createRooms/success');
 export var cancel = createAction('courses/cancel');
 /**
  * SELECTORS
@@ -91,37 +96,7 @@ export var isRefreshingAllSelector = state => get(state, 'courses.flags.courses.
 var refreshAllEpic = (action$, state$) => action$.pipe(
   ofType(refreshAll.toString()),
   mergeMap(() => {
-    return webexAjax({
-      method: 'GET',
-      entity: 'teams',
-      state: state$.value,
-      query: {
-        max: 1000
-      },
-      request() {
-        return setFlags({ flags: { courses: { refreshAll: true } } });
-      },
-      cancel() {
-        return takeUntil(action$.pipe(ofType(cancel.toString())))
-      },
-      success({ data }) {
-        return refreshAllCoursesIds({
-          names: state$.value.courses.names.map(course => {
-            var item = find(data.items, item => item.name === course.nombre_curso);
-            return item !== undefined
-              ? { ...course, id: item.id }
-              : course;
-          }),
-          flags: { courses: { refreshAll: false, allVerified: true} }
-        })
-      },
-      error(error) {
-        return requestError({
-          ...error,
-          flags: { courses: { refreshAll: false } },
-        })
-      },
-    })
+    return refreshAllAjax$(action$, state$)  
   }),
 );
 
@@ -142,6 +117,40 @@ var createEpic = (action$, state$) => action$.pipe(
   }),
 );
 
+var createRoomsEpic = (action$, state$) => action$.pipe(
+  ofType(createSuccess.toString()),
+  switchMap(({payload}) => {
+    return webexAjax({
+      state: state$.value,
+      entity: 'rooms',
+      method: 'POST',
+      body: {
+        title: PRIVATE_ROOM_TITLE,
+        teamId: payload.id
+      },
+      success({ data }) {
+        return from([
+          refreshAllCoursesIds({
+            names: state$.value.courses.names.map(course => {
+              return course.nombre_curso === payload.name
+                ? { ...course, rooms: [...get(course, 'rooms', []), data] }
+                : course;
+            }),
+            flags: { courses: { [payload.name]: { rooms: { [PRIVATE_ROOM_TITLE]: false } } } } 
+          }),
+          createRoomsSuccess()
+        ]);
+      },
+      error: (error) => requestError({ 
+        ...error, 
+        flags: { courses: { [payload.name]: { rooms: { [PRIVATE_ROOM_TITLE]: false } } } } 
+      }),
+      cancel: () => takeUntil(action$.pipe(ofType(cancel.toString()))),
+      request: () => setFlags({ flags: { courses: { [payload.name]: { rooms: { [PRIVATE_ROOM_TITLE]: true } } } } }),
+    })
+  })
+)
+
 var loadCoursesEpic = (action$, state$) => action$.pipe(
   ofType(loadCourses.toString()),
   map(() => {
@@ -156,7 +165,7 @@ var loadCoursesEpic = (action$, state$) => action$.pipe(
   })
 );
 
-export var epic = combineEpics(createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
+export var epic = combineEpics(createRoomsEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
 /**
  * FUNCTIONS
  */
@@ -182,14 +191,17 @@ function createAjax$(action$, state$, payload) {
       return takeUntil(action$.pipe(ofType(cancel.toString())))
     },
     success({ data }) {
-      return refreshAllCoursesIds({
-        names: state$.value.courses.names.map(course => {
-          return course.nombre_curso === payload.nombre_curso
-            ? { ...course, id: data.id }
-            : course;
+      return from([
+        refreshAllCoursesIds({
+          names: state$.value.courses.names.map(course => {
+            return course.nombre_curso === payload.nombre_curso
+              ? { ...course, id: data.id }
+              : course;
+          }),
+          flags: { courses: { [payload.nombre_curso]: { create: false, verified: true } } }
         }),
-        flags: { courses: { [payload.nombre_curso]: { create: false, verified: true } } }
-      })
+        createSuccess(data)
+      ]);
     },
     error(error) {
       return requestError({
@@ -197,7 +209,7 @@ function createAjax$(action$, state$, payload) {
         flags: { courses: { [payload.nombre_curso]: { create: false } } },
       })
     },
-  })
+  });
 }
 
 function refreshAjax$(action$, state$, payload) {
@@ -216,14 +228,17 @@ function refreshAjax$(action$, state$, payload) {
     },
     success({ data }) {
       var item = find(data.items, item => item.name === payload.nombre_curso);
-      return refreshAllCoursesIds({
-        names: state$.value.courses.names.map(course => {
-          return item !== undefined && course.nombre_curso === payload.nombre_curso
-            ? { ...course, id: item.id }
-            : course;
+      return from([
+        refreshAllCoursesIds({
+          names: state$.value.courses.names.map(course => {
+            return item !== undefined && course.nombre_curso === payload.nombre_curso
+              ? { ...course, id: item.id }
+              : course;
+          }),
+          flags: { courses: { [payload.nombre_curso]: { refresh: false, verified: true } } }
         }),
-        flags: { courses: { [payload.nombre_curso]: { refresh: false, verified: true } } }
-      })
+        refreshSuccess()
+      ]);
     },
     error(error) {
       return requestError({
@@ -232,6 +247,43 @@ function refreshAjax$(action$, state$, payload) {
       })
     },
   });
+}
+
+function refreshAllAjax$(action$, state$, payload) {
+  return webexAjax({
+    method: 'GET',
+    entity: 'teams',
+    state: state$.value,
+    query: {
+      max: 1000
+    },
+    request() {
+      return setFlags({ flags: { courses: { refreshAll: true } } });
+    },
+    cancel() {
+      return takeUntil(action$.pipe(ofType(cancel.toString())))
+    },
+    success({ data }) {
+      return from([
+        refreshAllCoursesIds({
+          names: state$.value.courses.names.map(course => {
+            var item = find(data.items, item => item.name === course.nombre_curso);
+            return item !== undefined
+              ? { ...course, id: item.id }
+              : course;
+          }),
+          flags: { courses: { refreshAll: false, allVerified: true} }
+        }),
+        refreshAllSuccess()
+      ]);
+    },
+    error(error) {
+      return requestError({
+        ...error,
+        flags: { courses: { refreshAll: false } },
+      })
+    },
+  })
 }
 
 function webexAjax({
@@ -259,7 +311,7 @@ function webexAjax({
       body
     }).pipe(
       cancel(),
-      map((res) => success({
+      switchMap((res) => success({
         statusCode: res.status,
         data: res.response
       })),
