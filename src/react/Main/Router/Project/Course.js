@@ -1,30 +1,46 @@
 import React from 'react';
+import { useDispatch } from 'react-redux';
 import {
   Box,
   Grid,
   Heading,
   Text,
   Collapse,
+  Flex,
+  IconButton,
 } from '@chakra-ui/core';
+import { FaRetweet } from 'react-icons/fa';
 
 import Member from './Member.js';
+import { refresh } from '../../../state/courses.js';
 
 function Course({course}) {
+  var dispatch = useDispatch();
   var [isCollapseOpen, setIsCollapseOpen] = React.useState(false);
 
   var toggleCollapse = React.useCallback(() => (
     setIsCollapseOpen(!isCollapseOpen)
   ), [setIsCollapseOpen, isCollapseOpen]);
 
+  var handleRefresh = React.useCallback((e) => {
+    e.stopPropagation();
+    dispatch(refresh(course))
+  }, [dispatch, course])
+
   return (
     <Box p={"1em"} shadow="lg" mb="1em" border="1px solid whitesmoke" onClick={toggleCollapse} cursor="pointer">
-      <Heading
-        fontSize="xl"
-        margin="0 0 0.5m 0"
-        color="blue.500"
-      >
-        {course.nombre_curso}
-      </Heading>
+      <Flex justify="space-between">
+        <Heading
+          fontSize="xl"
+          margin="0 0 0.5m 0"
+          color={course.id === undefined ? 'red.500' : 'green.500'}
+        >
+          {course.nombre_curso}
+        </Heading>
+        <Flex align="center">
+          <IconButton isDisabled={course.id !== undefined} isLoading={course.isRefreshing} onClick={handleRefresh} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="teal" icon={FaRetweet} />
+        </Flex>
+      </Flex>
       <Grid templateColumns="repeat(2, 1fr)" gap={1}>
         <Text w="100%" margin="0" fontWeight="bold">{course.year}</Text>
         <Text w="100%" margin="0" textAlign="right">{`${course.members.length} Miembros`}</Text>

@@ -16,12 +16,10 @@ function Project() {
     dispatch(loadCourses())
   ), [dispatch]);
 
-  console.log(courses);
-
   return (
     <Stack p="1em" spacing={8}>
       <Stack isInline>
-        <Button variantColor="green" onClick={handleOnLoadCourses}>Cargar cursos</Button>
+        <Button variantColor="blue" onClick={handleOnLoadCourses}>Cargar cursos</Button>
       </Stack>
       {courses.map((course, index) => (
         <Course key={`course-${index}`} course={course} />

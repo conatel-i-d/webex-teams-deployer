@@ -44,7 +44,7 @@ function Playground() {
   React.useEffect(() => {
     if (response === '') return;
     toast({
-      title: 'Exito',
+      title: 'OK',
       description: 'Se ha completado la consulta con exito.',
       status: 'success',
       duration: 9000,
