@@ -11,7 +11,7 @@ function Project() {
   var courses = useSelector(coursesSelector);
 
   return (
-    <Stack p="1em">
+    <Stack p="1em" spacing={8}>
       {courses.map((course, index) => (
         <Course key={`course-${index}`} course={course} />
       ))}
