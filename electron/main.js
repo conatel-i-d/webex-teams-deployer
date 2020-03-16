@@ -4,7 +4,6 @@ var url = require('url');
 var { app, BrowserWindow, ipcMain } = require('electron');
 var { channels } = require('../src/shared/constants.js');
 
-var IN_DEVELOPMENT = process.env.NODE_ENV !== 'production';
 var mainWindow;
 
 function createWindow() {
@@ -25,17 +24,16 @@ function createWindow() {
     show: false,
   });
 
-  if (IN_DEVELOPMENT === true) {
+  if (app.isPackaged === false) {
     mainWindow.webContents.openDevTools({
       mode: 'detach'
     });
+    require('./chromeExtensions.js');
   }
 
   mainWindow.loadURL(startUrl);
   mainWindow.on('closed', () => mainWindow = null);
   mainWindow.on('ready-to-show', () => mainWindow.show());
-
-  if (IN_DEVELOPMENT === true) require('./chromeExtensions.js');
 }
 
 app.on('ready', createWindow);
