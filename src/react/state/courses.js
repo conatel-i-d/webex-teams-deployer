@@ -6,6 +6,7 @@ import get from 'lodash/get';
 import { of, concat } from 'rxjs';
 import { switchMap, map, mergeMap, takeUntil, catchError } from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
+import deepmerge from 'deepmerge';
 const parse = require('csv-parse/lib/sync')
 
 var { fs } = window;
@@ -29,19 +30,23 @@ var slice = createSlice({
     errorMessage: ''
   },
   reducers: {
-    setCourses(_, {payload}) {
-      return payload;
+    setCourses(state, {payload}) {
+      return {
+        ...state,
+        ...payload,
+        flags: {},
+      };
     },
     setFlags(state, { payload }) {
-      state.flags = { ...state.flags, ...payload.flags };
+      state.flags = deepmerge(state.flags, payload.flags);
     },
     refreshAllCoursesIds(state, { payload }) {
-      state.flags = { ...state.flags, ...payload.flags };
+      state.flags = deepmerge(state.flags, payload.flags);
       state.names = payload.names;
     },
     requestError(state, { payload }) {
       state.errorMessage = payload.message;
-      state.flags = { ...state.flags, ...payload.flags };
+      state.flags = deepmerge(state.flags, payload.flags);
       console.log(payload);
     }
   }
@@ -63,12 +68,16 @@ export var professorsSelector = state => state.courses.professors;
 export var studentsSelector = state => state.courses.students;
 export var flagsSelector = state => state.courses.flags;
 export var coursesSelector = createSelector(namesSelector, professorsSelector, studentsSelector, flagsSelector, (names, professors, students, flags) => {
+  var refreshingAll = get(flags, 'courses.refreshAll', false);
+  var creatingAll = get(flags, 'courses.createAll', false);
+  var allVerified = get(flags, 'courses.allVerified', false);
   return names.map(({id, nombre_curso}) => ({
     id,
     nombre_curso,
     year: 2020,
-    isRefreshing: get(flags, 'courses.refreshAll', false) || get(flags, `courses.${ nombre_curso }.refresh`, false),
-    isCreating: get(flags, 'courses.createAll', false) || get(flags, `courses.${ nombre_curso }.create`, false),
+    isVerified: allVerified || get(flags, `courses.${ nombre_curso }.verified`, false),
+    isRefreshing: refreshingAll || get(flags, `courses.${ nombre_curso }.refresh`, false),
+    isCreating: creatingAll || get(flags, `courses.${ nombre_curso }.create`, false),
     members: [
       ...professors.filter(professor => professor.nombre_curso === nombre_curso),
       ...students.filter(student => student.nombre_curso === nombre_curso)
@@ -103,7 +112,7 @@ var refreshAllEpic = (action$, state$) => action$.pipe(
               ? { ...course, id: item.id }
               : course;
           }),
-          flags: { courses: { refreshAll: false } }
+          flags: { courses: { refreshAll: false, allVerified: true} }
         })
       },
       error(error) {
@@ -126,18 +135,10 @@ var refreshEpic = (action$, state$) => action$.pipe(
 var createEpic = (action$, state$) => action$.pipe(
   ofType(create.toString()),
   switchMap(({payload}) => {
-    return refreshAjax$(action$, state$, payload).pipe(
-      switchMap((action) => {
-        if (action.type !== refreshAllCoursesIds.toString()) return of(action);
-        var course = find(action.payload.names, name => name.nombre_curso === payload.nombre_curso);
-        console.log(course);
-        if (course && course.id) return of(action);
-        return concat(
-          of(action),
-          createAjax$(action$, state$, payload)
-        );
-      })
-    )
+    console.log(payload.id, payload.isVerified);
+    if (payload.id !== undefined) return of({type: null});
+    if (payload.isVerified === false) return refreshAjax$(action$, state$, payload);
+    return createAjax$(action$, state$, payload)
   }),
 );
 
@@ -167,7 +168,6 @@ function readFile(fileName, columns) {
 }
 
 function createAjax$(action$, state$, payload) {
-  console.log(find(state$.value.courses.names, course => course.nombre_curso === payload.nombre_curso))
   return webexAjax({
     method: 'POST',
     entity: 'teams',
@@ -188,7 +188,7 @@ function createAjax$(action$, state$, payload) {
             ? { ...course, id: data.id }
             : course;
         }),
-        flags: { courses: { [payload.nombre_curso]: { create: false } } }
+        flags: { courses: { [payload.nombre_curso]: { create: false, verified: true } } }
       })
     },
     error(error) {
@@ -222,7 +222,7 @@ function refreshAjax$(action$, state$, payload) {
             ? { ...course, id: item.id }
             : course;
         }),
-        flags: { courses: { [payload.nombre_curso]: { refresh: false } } }
+        flags: { courses: { [payload.nombre_curso]: { refresh: false, verified: true } } }
       })
     },
     error(error) {

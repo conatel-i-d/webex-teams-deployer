@@ -38,13 +38,17 @@ function Course({course}) {
         <Heading
           fontSize="xl"
           margin="0 0 0.5m 0"
-          color={course.id === undefined ? 'red.500' : 'green.500'}
+          color={course.isVerified === false
+            ? 'blue.500'
+            : course.id === undefined 
+              ? 'red.500' 
+              : 'green.500'}
         >
           {course.nombre_curso}
         </Heading>
         <Flex align="center">
           <IconButton isDisabled={course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleRefresh} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="teal" icon={FaRetweet} />
-          <IconButton ml="0.5em" isDisabled={course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleCreate} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="orange" icon={FaPlus} />
+          <IconButton ml="0.5em" isDisabled={course.isVerified === false || course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleCreate} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="orange" icon={FaPlus} />
         </Flex>
       </Flex>
       <Grid templateColumns="repeat(2, 1fr)" gap={1}>
