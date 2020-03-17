@@ -68,6 +68,7 @@ export var refreshRoomsSuccess = createAction('courses/refreshRooms/success');
 export var refreshMembershipsSuccess = createAction('courses/refreshMemberships/success')
 export var refreshAll = createAction('courses/refreshAll');
 export var refreshAllSuccess = createAction('courses/refreshAll/success');
+export var refreshAllRoomsAndMembershipsSuccess = createAction('courses/refreshAllRoomsAndMemberships/success');
 export var create = createAction('courses/create');
 export var createSuccess = createAction('courses/create/success');
 export var createPrivateRoomSuccess = createAction('courses/createPrivateRoom/success');
@@ -111,9 +112,19 @@ export var isRefreshingAllSelector = state => get(state, 'courses.flags.courses.
  */
 var refreshAllEpic = (action$, state$) => action$.pipe(
   ofType(refreshAll.toString()),
-  mergeMap(() => {
-    return refreshAllAjax$(action$, state$)  
-  }),
+  mergeMap(() => refreshAllAjax$(action$, state$)),
+);
+
+var refreshAllRoomsAndMembershipsEpic = (action$) => action$.pipe(
+  ofType(refreshAllSuccess.toString()),
+  switchMap(({payload}) => concat(
+    ...payload
+      .filter(course => course.id !== undefined)
+      .map(course => of(refresh(course))),
+    of(setFlags({ flags: { courses: { refreshAll: false, allVerified: true} } })),
+    of(refreshAllRoomsAndMembershipsSuccess(payload))
+  )),
+  delay(1000)
 );
 
 var refreshEpic = (action$, state$) => action$.pipe(
@@ -345,7 +356,7 @@ var loadCoursesEpic = (action$, state$) => action$.pipe(
   })
 );
 
-export var epic = combineEpics(refreshMembershipsEpic, refreshRoomsEpic, createTeamPrivateRoomMembershipsEpic, createTeamMembershipsEpic, createPrivateRoomEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
+export var epic = combineEpics(refreshAllRoomsAndMembershipsEpic, refreshMembershipsEpic, refreshRoomsEpic, createTeamPrivateRoomMembershipsEpic, createTeamMembershipsEpic, createPrivateRoomEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
 /**
  * FUNCTIONS
  */
@@ -444,17 +455,18 @@ function refreshAllAjax$(action$, state$, payload) {
       return takeUntil(action$.pipe(ofType(cancel.toString())))
     },
     success({ data }) {
+      var names = state$.value.courses.names.map(course => {
+        var item = find(data.items, item => item.name === course.nombre_curso);
+        return item !== undefined
+          ? { ...course, id: item.id }
+          : course;
+      });
       return from([
         refreshAllCoursesIds({
-          names: state$.value.courses.names.map(course => {
-            var item = find(data.items, item => item.name === course.nombre_curso);
-            return item !== undefined
-              ? { ...course, id: item.id }
-              : course;
-          }),
-          flags: { courses: { refreshAll: false, allVerified: true} }
+          names,
+          flags: {}
         }),
-        refreshAllSuccess()
+        refreshAllSuccess(names)
       ]);
     },
     error(error) {
