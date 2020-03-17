@@ -14,6 +14,7 @@ import { FaRetweet, FaPlus } from 'react-icons/fa';
 
 import Member from './Member.js';
 import { refresh, create } from '../../../state/courses.js';
+import { refreshTeamByName } from '../../../state/webex.js';
 
 function Course({course}) {
   var dispatch = useDispatch();
@@ -25,7 +26,8 @@ function Course({course}) {
 
   var handleRefresh = React.useCallback((e) => {
     e.stopPropagation();
-    dispatch(refresh(course))
+    //dispatch(refresh(course))
+    dispatch(refreshTeamByName(course));
   }, [dispatch, course]);
 
   var handleCreate = React.useCallback((e) => {
@@ -39,11 +41,11 @@ function Course({course}) {
         <Heading
           fontSize="xl"
           margin="0 0 0.5m 0"
-          color={course.isVerified === false
-            ? 'blue.500'
-            : course.id === undefined 
+          color={course.isVerified
+            ? course.id === undefined 
               ? 'red.500' 
-              : 'green.500'}
+              : 'green.500'
+            : 'blue.500'}
         >
           {course.nombre_curso}
         </Heading>

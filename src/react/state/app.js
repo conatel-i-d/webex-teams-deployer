@@ -41,11 +41,25 @@ var slice = createSlice({
  */
 export var { setApp, setApiKey, setFolder, ready } = slice.actions;
 export var init = createAction('app/init');
+export var readCSVFiles = createAction('app/readCSVFiles');
 /**
  * SELECTORS
  */
 export var readySelector = state => state.app.ready;
 export var appSelector = state => state.app;
+export var coursesFileNameSelector = state => state.app.coursesFileName;
+export var professorsFileNameSelector = state => state.app.professorsFileName;
+export var studentsFileNameSelector = state => state.app.studentsFileName;
+export var filesSelector = createSelector(
+  coursesFileNameSelector,
+  professorsFileNameSelector,
+  studentsFileNameSelector,
+  (coursesFileName, professorsFileName, studentsFileName) => ({
+    coursesFilePath: coursesFileName,
+    professorsFilePath: professorsFileName,
+    studentsFilePath: studentsFileName,
+  })
+);
 export var settingsSelector = createSelector(appSelector, (app) => ({
   ...app,
   ready: undefined,

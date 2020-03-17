@@ -3,20 +3,27 @@ import { useSelector, useDispatch } from 'react-redux';
 import {
   Stack,
   Button,
+  useToast,
 } from '@chakra-ui/core'
 
 import Course from './Course.js';
 import { coursesSelector, loadCourses, refreshAll, createAll, allVerifiedSelector, isCreatingAllSelector, isRefreshingAllSelector } from '../../../state/courses.js';
+import { readCSVFiles } from '../../../state/app.js';
+import { itemsSelector } from '../../../state/entities.js';
+import { messageSelector } from '../../../state/webex.js';
 
 function Project() {
   var dispatch = useDispatch();
-  var courses = useSelector(coursesSelector);
+  var toast = useToast();
+  //var courses = useSelector(coursesSelector);
+  var courses = useSelector(itemsSelector);
   var isRefreshingAll = useSelector(isRefreshingAllSelector)
   var isCreatingAll = useSelector(isCreatingAllSelector)
   var allVerified = useSelector(allVerifiedSelector);
+  var message = useSelector(messageSelector);
 
   var handleOnLoadCourses = React.useCallback(() => (
-    dispatch(loadCourses())
+    dispatch(readCSVFiles())
   ), [dispatch]);
 
   var handleOnRefreshAllCourses = React.useCallback(() => (
@@ -26,6 +33,17 @@ function Project() {
   var handleOnCreateAllCourses = React.useCallback(() => (
     dispatch(createAll(courses))
   ), [dispatch, courses]);
+
+  React.useEffect(() => {
+    if (message === undefined) return;
+    toast({
+      title: "Error",
+      description: message,
+      status: "error",
+      duration: 5000,
+      isClosable: true,
+    });
+  }, [message]);
 
   return (
     <Stack p="1em" spacing={8}>
