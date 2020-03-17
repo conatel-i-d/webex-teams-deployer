@@ -207,7 +207,7 @@ var refreshMembershipsEpic = (action$, state$) => action$.pipe(
               return course.nombre_curso === payload.name
                 ? { ...course, members: data.items.reduce((acc, item) => ({
                     ...acc,
-                    ["item.personEmail"]: item
+                    [item.personEmail]: item
                   }), {}) }
                 : course;
             }),
