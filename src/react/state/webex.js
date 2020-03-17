@@ -26,7 +26,7 @@ var slice = createSlice({
 /** ACTIONS */
 export var { requestError, request } = slice.actions;
 export var requestCancel = createAction('webex/request/cancel');
-export var requestSuccess = createAction('webex/request/success');
+export var requestDone = createAction('webex/request/done');
 export var refreshTeamByName = createAction('webex/refreshTeamByName');
 export var refreshTeamByNameDone = createAction('webex/refreshTeamByName/done');
 export var refreshTeamByNameSuccess = createAction('webex/refreshTeamByName/success');
@@ -122,6 +122,7 @@ function ajax$({state$, action$, options, success, error}) {
         ]);
       })
     ),
+    of(requestDone()),
   )
 }
 

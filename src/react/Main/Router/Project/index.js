@@ -7,18 +7,19 @@ import {
 } from '@chakra-ui/core'
 
 import Course from './Course.js';
-import { coursesSelector, loadCourses, refreshAll, createAll, allVerifiedSelector, isCreatingAllSelector, isRefreshingAllSelector } from '../../../state/courses.js';
+import { refreshAll, createAll, allVerifiedSelector, isCreatingAllSelector, isRefreshingAllSelector } from '../../../state/courses.js';
 import { readCSVFiles } from '../../../state/app.js';
 import { itemsSelector } from '../../../state/entities.js';
 import { messageSelector } from '../../../state/webex.js';
+import { isRefreshingSelector, isCreatingSelector } from '../../../state/flags.js';
 
 function Project() {
   var dispatch = useDispatch();
   var toast = useToast();
-  //var courses = useSelector(coursesSelector);
+  
   var courses = useSelector(itemsSelector);
-  var isRefreshingAll = useSelector(isRefreshingAllSelector)
-  var isCreatingAll = useSelector(isCreatingAllSelector)
+  var isRefreshing = useSelector(isRefreshingSelector);
+  var isCreating = useSelector(isCreatingSelector);
   var allVerified = useSelector(allVerifiedSelector);
   var message = useSelector(messageSelector);
 
@@ -49,8 +50,8 @@ function Project() {
     <Stack p="1em" spacing={8}>
       <Stack isInline>
         <Button onClick={handleOnLoadCourses}>Cargar cursos</Button>
-        <Button isLoading={isRefreshingAll} isDisabled={courses.length === 0 || isCreatingAll} variantColor="blue" onClick={handleOnRefreshAllCourses}>Veríficar Cursos</Button>
-        <Button isLoading={isCreatingAll} isDisabled={courses.length === 0 || allVerified === false} variantColor="orange" onClick={handleOnCreateAllCourses}>Crear Cursos</Button>
+        <Button isLoading={isRefreshing} isDisabled={courses.length === 0 || isCreating} variantColor="blue" onClick={handleOnRefreshAllCourses}>Veríficar Cursos</Button>
+        <Button isLoading={isCreating || isRefreshing} isDisabled={courses.length === 0 || allVerified === false} variantColor="orange" onClick={handleOnCreateAllCourses}>Crear Cursos</Button>
       </Stack>
       {courses.map((course, index) => (
         <Course key={`course-${index}`} course={course} />
