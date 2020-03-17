@@ -78,7 +78,7 @@ function Course({course}) {
             color="grey.50"
           >Rooms ({ get(course, 'rooms.length', 0) })</Heading>
           {get(course, 'rooms', []).map(room => (
-            <Text h="1.5em" key={room.id} w="100%" margin="0" color="gray.600">{room.title}</Text>
+            <Text h="1.5em" key={room.id} w="100%" margin="0" color="gray.600">{room.name || room.title}</Text>
           ))}
         </>
       </Collapse>}

@@ -53,7 +53,7 @@ var slice = createSlice({
     refreshCourseMemberId(state, { payload }) {
       state.flags = deepmerge(state.flags, payload.flags);
       var course = find(state.names, c => c.nombre_curso === payload.course.nombre_curso);
-      set(course, `members.${payload.data.personEmail}`, payload.data);
+      set(course, `members["${payload.data.personEmail}"]`, payload.data);
     }
   }
 });
@@ -67,6 +67,8 @@ export var refreshSuccess = createAction('courses/refresh/success');
 export var refreshRoomsSuccess = createAction('courses/refreshRooms/success');
 export var refreshMembershipsSuccess = createAction('courses/refreshMemberships/success')
 export var refreshAll = createAction('courses/refreshAll');
+export var createAll = createAction('courses/createAll');
+export var createAllSuccess = createAction('courses/createAll/success');
 export var refreshAllSuccess = createAction('courses/refreshAll/success');
 export var refreshAllRoomsAndMembershipsSuccess = createAction('courses/refreshAllRoomsAndMemberships/success');
 export var create = createAction('courses/create');
@@ -106,7 +108,9 @@ export var coursesSelector = createSelector(namesSelector, professorsSelector, s
     ]
   }))
 });
-export var isRefreshingAllSelector = state => get(state, 'courses.flags.courses.refreshAll', false)
+export var isRefreshingAllSelector = state => get(state, 'courses.flags.courses.refreshAll', false);
+export var isCreatingAllSelector = state => get(state, 'courses.flags.courses.createAll', false);
+export var allVerifiedSelector = state => get(state, 'courses.flags.courses.allVerified', false);
 /**
  * EPICS
  */
@@ -115,16 +119,32 @@ var refreshAllEpic = (action$, state$) => action$.pipe(
   mergeMap(() => refreshAllAjax$(action$, state$)),
 );
 
+var createAllEpic = (action$, state$) => action$.pipe(
+  ofType(createAll.toString()),
+  switchMap(({payload}) => {
+    var allVerified = get(state$.value, 'courses.flags.courses.allVerified', false);
+    if (allVerified === false) return of({type: null});
+    return concat(...[
+      of(setFlags({ flags: { courses: { createAll: true } } })),
+      ...payload
+        .filter(course => course.id === undefined)
+        .map(course => of(create(course)).pipe(delay(5000))),
+      of(setFlags({ flags: { courses: { createAll: false } } })),
+      of(createAllSuccess(payload))
+    ]);
+  }),
+)
+
 var refreshAllRoomsAndMembershipsEpic = (action$) => action$.pipe(
   ofType(refreshAllSuccess.toString()),
   switchMap(({payload}) => concat(
     ...payload
       .filter(course => course.id !== undefined)
-      .map(course => of(refresh(course))),
+      .map(course => of(refresh(course)).pipe(delay(1000))),
     of(setFlags({ flags: { courses: { refreshAll: false, allVerified: true} } })),
     of(refreshAllRoomsAndMembershipsSuccess(payload))
   )),
-  delay(1000)
+  
 );
 
 var refreshEpic = (action$, state$) => action$.pipe(
@@ -187,7 +207,7 @@ var refreshMembershipsEpic = (action$, state$) => action$.pipe(
               return course.nombre_curso === payload.name
                 ? { ...course, members: data.items.reduce((acc, item) => ({
                     ...acc,
-                    [item.personEmail]: item
+                    ["item.personEmail"]: item
                   }), {}) }
                 : course;
             }),
@@ -208,7 +228,7 @@ var refreshMembershipsEpic = (action$, state$) => action$.pipe(
 
 var createEpic = (action$, state$) => action$.pipe(
   ofType(create.toString()),
-  switchMap(({payload}) => {
+  mergeMap(({payload}) => {
     console.log(payload.id, payload.isVerified);
     if (payload.id !== undefined) return of({type: null});
     if (payload.isVerified === false) return refreshAjax$(action$, state$, payload);
@@ -218,7 +238,7 @@ var createEpic = (action$, state$) => action$.pipe(
 
 var createTeamMembershipsEpic = (action$, state$) => action$.pipe(
   ofType(createSuccess.toString()),
-  switchMap(({payload}) => {
+  mergeMap(({payload}) => {
     return concat(
       ...payload.members.map(member => {
         return webexAjax({
@@ -255,7 +275,7 @@ var createTeamMembershipsEpic = (action$, state$) => action$.pipe(
 
 var createPrivateRoomEpic = (action$, state$) => action$.pipe(
   ofType(createTeamMembershipsSuccess.toString()),
-  switchMap(({payload}) => {
+  mergeMap(({payload}) => {
     return webexAjax({
       state: state$.value,
       entity: 'rooms',
@@ -297,7 +317,7 @@ var createPrivateRoomEpic = (action$, state$) => action$.pipe(
 
 var createTeamPrivateRoomMembershipsEpic = (action$, state$) => action$.pipe(
   ofType(createPrivateRoomSuccess.toString()),
-  switchMap(({payload}) => {
+  mergeMap(({payload}) => {
     return concat(
       ...payload.members.filter(m => m.P !== undefined).map(member => {
         return webexAjax({
@@ -356,7 +376,7 @@ var loadCoursesEpic = (action$, state$) => action$.pipe(
   })
 );
 
-export var epic = combineEpics(refreshAllRoomsAndMembershipsEpic, refreshMembershipsEpic, refreshRoomsEpic, createTeamPrivateRoomMembershipsEpic, createTeamMembershipsEpic, createPrivateRoomEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
+export var epic = combineEpics(createAllEpic, refreshAllRoomsAndMembershipsEpic, refreshMembershipsEpic, refreshRoomsEpic, createTeamPrivateRoomMembershipsEpic, createTeamMembershipsEpic, createPrivateRoomEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
 /**
  * FUNCTIONS
  */
