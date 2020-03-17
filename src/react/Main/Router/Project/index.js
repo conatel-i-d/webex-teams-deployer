@@ -21,6 +21,8 @@ function Project() {
     dispatch(refreshAll())
   ), [dispatch]);
 
+  console.log(courses);
+
   return (
     <Stack p="1em" spacing={8}>
       <Stack isInline>

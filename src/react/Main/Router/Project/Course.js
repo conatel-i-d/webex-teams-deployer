@@ -1,5 +1,6 @@
 import React from 'react';
 import { useDispatch } from 'react-redux';
+import get from 'lodash/get';
 import {
   Box,
   Grid,
@@ -71,6 +72,14 @@ function Course({course}) {
               <Member key={`member-${index}`} member={member} />
             ))}
           </Grid>
+          <Heading
+            fontSize="sm"
+            margin="0 0 0.5m 0"
+            color="grey.50"
+          >Rooms ({ get(course, 'rooms.length', 0) })</Heading>
+          {get(course, 'rooms', []).map(room => (
+            <Text h="1.5em" key={room.id} w="100%" margin="0" color="gray.600">{room.title}</Text>
+          ))}
         </>
       </Collapse>}
     </Box>

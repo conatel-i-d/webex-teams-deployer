@@ -5,7 +5,7 @@ import find from 'lodash/find';
 import get from 'lodash/get';
 import set from 'lodash/set';
 import { of, concat, from } from 'rxjs';
-import { switchMap, map, mergeMap, takeUntil, catchError, delay } from 'rxjs/operators';
+import { switchMap, map, mergeMap, concatMap, takeUntil, catchError, delay } from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
 import deepmerge from 'deepmerge';
 const parse = require('csv-parse/lib/sync')
@@ -64,6 +64,8 @@ export var { refreshCourseMemberId, setCourses, requestError, setFlags, refreshA
 export var loadCourses = createAction('courses/loadCourses');
 export var refresh = createAction('courses/refresh');
 export var refreshSuccess = createAction('courses/refresh/success');
+export var refreshRoomsSuccess = createAction('courses/refreshRooms/success');
+export var refreshMembershipsSuccess = createAction('courses/refreshMemberships/success')
 export var refreshAll = createAction('courses/refreshAll');
 export var refreshAllSuccess = createAction('courses/refreshAll/success');
 export var create = createAction('courses/create');
@@ -85,16 +87,21 @@ export var coursesSelector = createSelector(namesSelector, professorsSelector, s
   var refreshingAll = get(flags, 'courses.refreshAll', false);
   var creatingAll = get(flags, 'courses.createAll', false);
   var allVerified = get(flags, 'courses.allVerified', false);
-  return names.map(({id, nombre_curso}) => ({
-    id,
-    nombre_curso,
+  return names.map((course) => ({
+    id: course.id,
+    nombre_curso: course.nombre_curso,
     year: 2020,
-    isVerified: allVerified || get(flags, `courses.${ nombre_curso }.verified`, false),
-    isRefreshing: refreshingAll || get(flags, `courses.${ nombre_curso }.refresh`, false),
-    isCreating: creatingAll || get(flags, `courses.${ nombre_curso }.create`, false),
+    rooms: course.rooms,
+    isVerified: allVerified || get(flags, `courses.${ course.nombre_curso }.verified`, false),
+    isRefreshing: refreshingAll || get(flags, `courses.${ course.nombre_curso }.refresh`, false),
+    isCreating: creatingAll || get(flags, `courses.${ course.nombre_curso }.create`, false),
     members: [
-      ...professors.filter(professor => professor.nombre_curso === nombre_curso),
-      ...students.filter(student => student.nombre_curso === nombre_curso)
+      ...professors
+        .filter(professor => professor.nombre_curso === course.nombre_curso)
+        .map(professor => ({...professor, ...get(course, `members["${professor.email}"]`, {})})),
+      ...students
+        .filter(student => student.nombre_curso === course.nombre_curso)
+        .map(student => ({...student, ...get(course, `members["${student.email}"]`, {})}))
     ]
   }))
 });
@@ -111,9 +118,81 @@ var refreshAllEpic = (action$, state$) => action$.pipe(
 
 var refreshEpic = (action$, state$) => action$.pipe(
   ofType(refresh.toString()),
-  mergeMap(({payload}) => {
+  concatMap(({payload}) => {
     return refreshAjax$(action$, state$, payload)
   }),
+);
+
+var refreshRoomsEpic = (action$, state$) => action$.pipe(
+  ofType(refreshSuccess.toString()),
+  switchMap(({payload}) => {
+    if (payload.id === undefined) {
+      return of(setFlags({ flags: { courses: { [payload.nombre_curso]: { refresh: false, verified: true } } }  }))
+    }
+    return webexAjax({
+      state: state$.value,
+      entity: 'rooms',
+      method: 'GET',
+      query: {
+        teamId: payload.id
+      },
+      success({ data }) {
+        return from([
+          refreshAllCoursesIds({
+            names: state$.value.courses.names.map(course => {
+              return course.nombre_curso === payload.name
+                ? { ...course, rooms: data.items }
+                : course;
+            }),
+            flags: {} 
+          }),
+          refreshRoomsSuccess({...payload, rooms: data.items})
+        ]);
+      },
+      error: (error) => requestError({ 
+        ...error, 
+        flags: { courses: { [payload.name]: { rooms: { [PRIVATE_ROOM_TITLE]: false } } } } 
+      }),
+      cancel: () => takeUntil(action$.pipe(ofType(cancel.toString()))),
+      request: () => ({type: null}),
+    })
+  })
+);
+
+var refreshMembershipsEpic = (action$, state$) => action$.pipe(
+  ofType(refreshRoomsSuccess.toString()),
+  switchMap(({payload}) => {
+    return webexAjax({
+      state: state$.value,
+      entity: 'team/memberships',
+      method: 'GET',
+      query: {
+        teamId: payload.id
+      },
+      success({ data }) {
+        return from([
+          refreshAllCoursesIds({
+            names: state$.value.courses.names.map(course => {
+              return course.nombre_curso === payload.name
+                ? { ...course, members: data.items.reduce((acc, item) => ({
+                    ...acc,
+                    [item.personEmail]: item
+                  }), {}) }
+                : course;
+            }),
+            flags: { courses: { [payload.nombre_curso]: { refresh: false, verified: true } } } 
+          }),
+          refreshMembershipsSuccess({...payload, members: data.items})
+        ]);
+      },
+      error: (error) => requestError({ 
+        ...error, 
+        flags: { courses: { [payload.name]: { rooms: { [PRIVATE_ROOM_TITLE]: false } } } } 
+      }),
+      cancel: () => takeUntil(action$.pipe(ofType(cancel.toString()))),
+      request: () => ({type: null}),
+    })
+  })
 );
 
 var createEpic = (action$, state$) => action$.pipe(
@@ -266,7 +345,7 @@ var loadCoursesEpic = (action$, state$) => action$.pipe(
   })
 );
 
-export var epic = combineEpics(createTeamPrivateRoomMembershipsEpic, createTeamMembershipsEpic, createPrivateRoomEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
+export var epic = combineEpics(refreshMembershipsEpic, refreshRoomsEpic, createTeamPrivateRoomMembershipsEpic, createTeamMembershipsEpic, createPrivateRoomEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
 /**
  * FUNCTIONS
  */
@@ -296,7 +375,7 @@ function createAjax$(action$, state$, payload) {
         refreshAllCoursesIds({
           names: state$.value.courses.names.map(course => {
             return course.nombre_curso === payload.nombre_curso
-              ? { ...course, id: data.id }
+              ? { ...course, id: data.id, rooms: [data] }
               : course;
           }),
           flags: {},
@@ -336,9 +415,9 @@ function refreshAjax$(action$, state$, payload) {
               ? { ...course, id: item.id }
               : course;
           }),
-          flags: { courses: { [payload.nombre_curso]: { refresh: false, verified: true } } }
+          flags: {}
         }),
-        refreshSuccess()
+        refreshSuccess({...payload, ...item})
       ]);
     },
     error(error) {
