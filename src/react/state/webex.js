@@ -10,6 +10,7 @@ import get from 'lodash/get';
 var API = 'https://api.ciscospark.com/v1/';
 var GET = 'GET';
 var POST = 'POST';
+var PRIVATE_ROOM = 'Docentes';
 /** SLICE */
 var slice = createSlice({
   name: 'webex',
@@ -27,6 +28,17 @@ var slice = createSlice({
 export var { requestError, request } = slice.actions;
 export var requestCancel = createAction('webex/request/cancel');
 export var requestDone = createAction('webex/request/done');
+export var createTeam = createAction('webex/createTeam');
+export var createTeamSuccess = createAction('webex/createTeamSuccess');
+export var createTeamDone = createAction('webex/createTeamDone');
+export var createTeamMembershipSuccess = createAction('webex/createTeamMembership/success');
+export var createTeamMembershipError = createAction('webex/createTeamMembership/error');
+export var createTeamMembershipsSuccess = createAction('webex/createTeamMemberships/success');
+export var createTeamPrivateRoomSuccess = createAction('webex/createTeamPrivateRoom/success');
+export var createTeamPrivateRoomError = createAction('webex/createTeamPrivateRoom/error');
+export var createTeamPrivateRoomMembershipSuccess = createAction('webex/createTeamPrivateRoomMembership/success');
+export var createTeamPrivateRoomMembershipError = createAction('webex/createTeamPrivateRoomMembership/error');
+export var createTeamPrivateRoomMembershipsSuccess = createAction('webex/createTeamPrivateRoomMemberships/success');
 export var refreshTeamByName = createAction('webex/refreshTeamByName');
 export var refreshTeamByNameDone = createAction('webex/refreshTeamByName/done');
 export var refreshTeamByNameSuccess = createAction('webex/refreshTeamByName/success');
@@ -41,12 +53,92 @@ export var messageSelector = state => {
 /** EPICS */
 var cancelEpic = action$ => action$.pipe(ofType(requestCancel.toString()));
 
+var createTeamEpic = (action$, state$) => action$.pipe(
+  ofType(createTeam.toString()),
+  switchMap(({payload}) => {
+    if (payload.id !== undefined || payload.isVerified === false) return of({type: null});
+    return ajax$({ action$, state$,
+      options: {
+        url: `${API}/teams`,
+        method: POST,
+        body: {
+          name: payload.nombre_curso
+        }
+      },
+      success: (data) => of(createTeamSuccess({...payload, ...data, rooms: [data]})),
+      error: () => createTeamDone(payload)
+    })
+  })
+);
+
+var createTeamMembershipsEpic = (action$, state$) => action$.pipe(
+  ofType(createTeamSuccess.toString()),
+  switchMap(({payload}) => (
+    payload.id === undefined || payload.members === undefined || payload.members.length === 0
+      ? of(createTeamDone(payload))
+      : concat(...[
+        ...payload.members.map(member => (
+          ajax$({ action$, state$,
+            options: {
+              url: `${API}/team/memberships`,
+              method: POST,
+              body: { teamId: payload.id, personEmail: member.email, isModerator: member.P !== undefined }
+            },
+            success: data => of(createTeamMembershipSuccess({...data, nombre_curso: member.nombre_curso})),
+            error: () => createTeamMembershipError(member)
+          })
+        )),
+        of(createTeamMembershipsSuccess(payload))
+      ]))
+  )
+);
+
+var createTeamPrivateRoomEpic = (action$, state$) => action$.pipe(
+  ofType(createTeamMembershipsSuccess.toString()),
+  switchMap(({payload}) => (
+    payload.id === undefined
+      ? of(createTeamDone(payload))
+      : ajax$({ action$, state$,
+        options: {
+          url: `${API}/rooms`,
+          method: POST,
+          body: { teamId: payload.id, title: PRIVATE_ROOM }
+        },
+        success: data => of(createTeamPrivateRoomSuccess({...payload, rooms: [data]})),
+        error: () => createTeamPrivateRoomError(payload)
+      })
+  ))
+);
+
+var createTeamPrivateRoomMembershipsEpic = (action$, state$) => action$.pipe(
+  ofType(createTeamPrivateRoomSuccess.toString()),
+  switchMap(({payload}) => (
+    payload.id === undefined || payload.members === undefined || payload.members.length === 0 || payload.rooms === undefined || payload.rooms.length === 0
+      ? of(createTeamDone(payload))
+      : concat(...[
+        ...payload.members.filter(member => member.P !== undefined).map(member => (
+          ajax$({ action$, state$,
+            options: {
+              url: `${API}/memberships`,
+              method: POST,
+              body: { roomId: payload.rooms[0].id, personEmail: member.email, isModerator: false }
+            },
+            success: () => from([
+              createTeamPrivateRoomMembershipSuccess(),
+              createTeamDone(payload)
+            ]),
+            error: () => createTeamPrivateRoomMembershipError(member)
+          })
+        )),
+        of(createTeamPrivateRoomMembershipsSuccess(payload))
+      ]))
+  )
+);
+
 var refreshTeamByNameEpic = (action$, state$) => action$.pipe(
   ofType(refreshTeamByName.toString()),
   switchMap(({payload}) => (
-    ajax$({
-      action$,
-      state$,
+    ajax$({ action$, state$,
       options: {
         url: `${API}/teams`,
         method: GET,
@@ -106,7 +198,15 @@ var refreshTeamMembershipsEpic = (action$, state$) => action$.pipe(
   ))
 )
 
-export var epic = combineEpics(refreshTeamMembershipsEpic, refreshTeamRoomsEpic, refreshTeamByNameEpic);
+export var epic = combineEpics(
+  createTeamEpic,
+  createTeamMembershipsEpic,
+  createTeamPrivateRoomEpic,
+  createTeamPrivateRoomMembershipsEpic,
+  refreshTeamMembershipsEpic,
+  refreshTeamRoomsEpic,
+  refreshTeamByNameEpic
+);
 /** FUNCTIONS */
 function ajax$({state$, action$, options, success, error}) {
   return concat(
@@ -117,8 +217,8 @@ function ajax$({state$, action$, options, success, error}) {
       catchError((err) => {
         err = pick(err, 'message', 'name', 'status', 'response');
         return from([
-          of(requestError(err)),
-          of(error(err))
+          requestError(err),
+          error(err)
         ]);
       })
     ),

@@ -7,7 +7,7 @@ import {
 } from '@chakra-ui/core'
 
 import Course from './Course.js';
-import { refreshAll, createAll, allVerifiedSelector, isCreatingAllSelector, isRefreshingAllSelector } from '../../../state/courses.js';
+import { refreshAll, createAll, allVerifiedSelector } from '../../../state/courses.js';
 import { readCSVFiles } from '../../../state/app.js';
 import { itemsSelector } from '../../../state/entities.js';
 import { messageSelector } from '../../../state/webex.js';

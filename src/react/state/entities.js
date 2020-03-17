@@ -2,7 +2,7 @@ import { createSlice, createSelector } from '@reduxjs/toolkit';
 import { ofType, combineEpics } from 'redux-observable';
 import { normalize, schema as normalizrSchema } from 'normalizr';
 import deepmerge from 'deepmerge';
-import { from } from 'rxjs';
+import { from, of, concat } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
 import omit from 'lodash/omit';
 
@@ -12,7 +12,12 @@ import {
   refreshTeamByNameSuccess,
   refreshTeamByNameDone,
   refreshTeamRoomsSuccess,
-  refreshTeamMembershipsSuccess
+  refreshTeamMembershipsSuccess,
+  createTeam,
+  createTeamSuccess,
+  createTeamPrivateRoomSuccess,
+  createTeamMembershipSuccess,
+  createTeamDone,
 } from './webex.js';
 
 var parse = require('csv-parse/lib/sync');
@@ -39,10 +44,16 @@ var slice = createSlice({
     merge(state, { payload }) {
       return deepmerge(state, payload.entities);
     },
+    reset(_, {payload}) {
+      return {
+        courses: {},
+        members: {},
+      };
+    }
   }
 });
 /** ACTIONS */
-export var { merge } = slice.actions;
+export var { merge, reset } = slice.actions;
 /** SELECTORS */
 export var coursesSelector = state => state.entities.courses;
 export var membersSelector = state => state.entities.members;
@@ -67,14 +78,55 @@ var readCSVFilesEpic = (action$, state$) => action$.pipe(
       professorsFilePath,
       studentsFilePath,
     } = filesSelector(state$.value);
-    return from([
-      [coursesFilePath, COURSES_COLUMNS, coursesSchema],
-      [professorsFilePath, PROFESSORS_COLUMNS, membersSchema], 
-      [studentsFilePath, STUDENTS_COLUMNS, membersSchema], 
-    ]); 
+    return concat([
+      reset(),
+      merge(normalize(readCSVFile(coursesFilePath, COURSES_COLUMNS), [coursesSchema])),
+      merge(normalize(readCSVFile(professorsFilePath, PROFESSORS_COLUMNS), [membersSchema])),
+      merge(normalize(readCSVFile(studentsFilePath, STUDENTS_COLUMNS), [membersSchema])),
+    ])
   }),
-  map(([filePath, columns, schema]) => (
-    merge(normalize(readCSVFile(filePath, columns), [schema]))
+);
+
+var updateCourseOnCreateTeamEpic = action$ => action$.pipe(
+  ofType(createTeam.toString()),
+  map(({payload}) => merge(
+    normalize({
+      ...omit(payload, 'members'),
+      isRefreshing: false,
+      isCreating: true,
+      isVerified: false,
+    }, coursesSchema)
+  ))
+);
+
+var updateCourseOnCreateTeamSuccessEpic = action$ => action$.pipe(
+  ofType(
+    createTeamSuccess.toString(),
+    createTeamPrivateRoomSuccess.toString()
+  ),
+  map(({payload}) => merge(
+    normalize({
+      ...omit(payload, 'members'),
+    }, coursesSchema)
+  ))
+);
+
+var updateMembersOnCreateSuccessEpic = action$ => action$.pipe(
+  ofType(createTeamMembershipSuccess.toString()),
+  map(({payload}) => merge(
+    normalize(payload, membersSchema)
+  ))
+)
+
+var updateCourseOnCreateTeamDoneEpic = action$ => action$.pipe(
+  ofType(createTeamDone.toString()),
+  map(({payload}) => merge(
+    normalize({
+      ...omit(payload, 'members', 'rooms'),
+      isRefreshing: false,
+      isCreating: false,
+      isVerified: true,
+    }, coursesSchema)
   ))
 );
 
@@ -127,6 +179,10 @@ export var epic = combineEpics(
   updateCourseOnRefreshSuccessEpic,
   updateCourseOnRefreshTeamByNameDoneEpic,
   updateMembersOnRefreshSuccessEpic,
+  updateCourseOnCreateTeamEpic,
+  updateCourseOnCreateTeamSuccessEpic,
+  updateMembersOnCreateSuccessEpic,
+  updateCourseOnCreateTeamDoneEpic,
   readCSVFilesEpic
 );
 /** FUNCTIONS */

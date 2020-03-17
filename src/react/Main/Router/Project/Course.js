@@ -13,8 +13,7 @@ import {
 import { FaRetweet, FaPlus } from 'react-icons/fa';
 
 import Member from './Member.js';
-import { refresh, create } from '../../../state/courses.js';
-import { refreshTeamByName } from '../../../state/webex.js';
+import { refreshTeamByName, createTeam } from '../../../state/webex.js';
 
 function Course({course}) {
   var dispatch = useDispatch();
@@ -32,7 +31,7 @@ function Course({course}) {
 
   var handleCreate = React.useCallback((e) => {
     e.stopPropagation();
-    dispatch(create(course))
+    dispatch(createTeam(course))
   }, [dispatch, course]);
 
   return (
@@ -51,7 +50,7 @@ function Course({course}) {
         </Heading>
         <Flex align="center">
           <IconButton isDisabled={course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleRefresh} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="teal" icon={FaRetweet} />
-          <IconButton ml="0.5em" isDisabled={course.isVerified === false || course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleCreate} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="orange" icon={FaPlus} />
+          <IconButton ml="0.5em" isDisabled={!course.isVerified || course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleCreate} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="orange" icon={FaPlus} />
         </Flex>
       </Flex>
       <Grid templateColumns="repeat(2, 1fr)" gap={1}>
