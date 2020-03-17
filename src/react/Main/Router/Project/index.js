@@ -43,7 +43,7 @@ function Project() {
       duration: 5000,
       isClosable: true,
     });
-  }, [message]);
+  }, [message, toast]);
 
   return (
     <Stack p="1em" spacing={8}>

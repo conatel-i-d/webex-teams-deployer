@@ -1,6 +1,6 @@
 import { createSlice, createAction } from '@reduxjs/toolkit';
 import { ofType, combineEpics } from 'redux-observable';
-import { map, switchMap, take, takeUntil, catchError, startWith } from 'rxjs/operators';
+import { map, switchMap, take, takeUntil, catchError, startWith, mapTo } from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
 import { of, concat, from, zip } from 'rxjs';
 import find from 'lodash/find';
@@ -143,7 +143,6 @@ var createTeamPrivateRoomMembershipsEpic = (action$, state$) => action$.pipe(
             success: () => from([
               createTeamPrivateRoomMembershipSuccess(),
               createTeamDone(payload),
-              requestChain(),
             ]),
             error: () => createTeamPrivateRoomMembershipError(member)
           })
@@ -222,13 +221,20 @@ var refreshTeamMembershipsEpic = (action$, state$) => action$.pipe(
             payload = {...payload, members: data.items };
             return from([
               refreshTeamMembershipsSuccess(payload),
-              refreshTeamByNameDone(payload),
-              requestChain()
+              refreshTeamByNameDone(payload)
             ])
           },
           error: () => refreshTeamByNameDone(payload)
         })
   ))
+)
+
+var requestChainEpic = action$ => action$.pipe(
+  ofType(
+    refreshTeamByNameDone.toString(),
+    createTeamDone.toString()
+  ),
+  mapTo(requestChain())
 )
 
 export var epic = combineEpics(
@@ -240,7 +246,8 @@ export var epic = combineEpics(
   refreshTeamMembershipsEpic,
   refreshTeamRoomsEpic,
   refreshTeamByNameEpic,
-  refreshAllEpic
+  refreshAllEpic,
+  requestChainEpic,
 );
 /** FUNCTIONS */
 function ajax$({state$, action$, options, success, error}) {

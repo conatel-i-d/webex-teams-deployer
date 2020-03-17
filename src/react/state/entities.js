@@ -2,9 +2,10 @@ import { createSlice, createSelector } from '@reduxjs/toolkit';
 import { ofType, combineEpics } from 'redux-observable';
 import { normalize, schema as normalizrSchema } from 'normalizr';
 import deepmerge from 'deepmerge';
-import { from, of, concat } from 'rxjs';
+import { concat } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
 import omit from 'lodash/omit';
+import toLower from 'lodash/toLower';
 
 import { readCSVFiles, filesSelector } from './app.js';
 import { 
@@ -31,7 +32,7 @@ var coursesSchema = new normalizrSchema.Entity('courses', {}, {
   idAttribute: 'nombre_curso'
 });
 var membersSchema = new normalizrSchema.Entity('members', {}, {
-  idAttribute: (value) => `${value.nombre_curso || value.name}|${value.email || value.personEmail}`
+  idAttribute: (value) => `${value.nombre_curso || value.name}|${toLower(value.email || value.personEmail)}`
 });
 /** SLICE */
 var slice = createSlice({
@@ -44,7 +45,7 @@ var slice = createSlice({
     merge(state, { payload }) {
       return deepmerge(state, payload.entities);
     },
-    reset(_, {payload}) {
+    reset() {
       return {
         courses: {},
         members: {},
@@ -65,7 +66,7 @@ export var itemsSelector = createSelector(
       ...course,
       year: 2020,
       members: Object.values(members)
-        .filter(member => member.nombre_curso === courseId)
+        .filter(member => member.codigo_persona !== undefined && member.nombre_curso === courseId)
     }))
   )
 );
