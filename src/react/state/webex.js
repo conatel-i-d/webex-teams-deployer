@@ -2,7 +2,7 @@ import { createSlice, createAction } from '@reduxjs/toolkit';
 import { ofType, combineEpics } from 'redux-observable';
 import { switchMap, map, takeUntil, catchError } from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
-import { of, concat } from 'rxjs';
+import { of, concat, from } from 'rxjs';
 import find from 'lodash/find';
 import pick from 'lodash/pick';
 import get from 'lodash/get';
@@ -18,17 +18,20 @@ var slice = createSlice({
     request() {
       return {}
     },
-    error(_, { payload }) {
+    requestError(_, { payload }) {
       return payload;
     }
   }
 });
 /** ACTIONS */
-export var { error, request } = slice.actions;
+export var { requestError, request } = slice.actions;
 export var requestCancel = createAction('webex/request/cancel');
 export var requestSuccess = createAction('webex/request/success');
 export var refreshTeamByName = createAction('webex/refreshTeamByName');
+export var refreshTeamByNameDone = createAction('webex/refreshTeamByName/done');
 export var refreshTeamByNameSuccess = createAction('webex/refreshTeamByName/success');
+export var refreshTeamRoomsSuccess = createAction('webex/refreshTeamRooms/success');
+export var refreshTeamMembershipsSuccess = createAction('webex/refreshTeamMemberships/success');
 /** SELECTORS */
 export var messageSelector = state => {
   var ajaxMessage = get(state, 'webex.message', undefined);
@@ -51,23 +54,72 @@ var refreshTeamByNameEpic = (action$, state$) => action$.pipe(
       success(data) {
         var { items = [] } = data;
         var course = find(items, item => item.name === payload.nombre_curso);
-        return refreshTeamByNameSuccess({...payload, ...course})
-      }
+        return of(refreshTeamByNameSuccess({...payload, ...course}))
+      },
+      error: () => refreshTeamByNameDone(payload)
     })
   ))
 );
 
-export var epic = combineEpics(refreshTeamByNameEpic);
+var refreshTeamRoomsEpic = (action$, state$) => action$.pipe(
+  ofType(refreshTeamByNameSuccess.toString()),
+  switchMap(({payload}) => (
+    payload.id === undefined
+      ? of(refreshTeamByNameDone(payload))
+      : ajax$({
+          action$,
+          state$,
+          options: {
+            url: `${API}/rooms?${encodeQueryData({teamId: payload.id})}`,
+            method: GET,
+          },
+          success(data) {
+            payload = {...payload, rooms: data.items };
+            return of(refreshTeamRoomsSuccess(payload))
+          },
+          error: () => refreshTeamByNameDone(payload)
+        })
+  ))
+)
+
+var refreshTeamMembershipsEpic = (action$, state$) => action$.pipe(
+  ofType(refreshTeamRoomsSuccess.toString()),
+  switchMap(({payload}) => (
+    payload.id === undefined
+      ? of(refreshTeamByNameDone(payload))
+      : ajax$({
+          action$,
+          state$,
+          options: {
+            url: `${API}/team/memberships?${encodeQueryData({teamId: payload.id})}`,
+            method: GET,
+          },
+          success(data) {
+            payload = {...payload, members: data.items };
+            return from([
+              refreshTeamMembershipsSuccess(payload),
+              refreshTeamByNameDone(payload)
+            ])
+          },
+          error: () => refreshTeamByNameDone(payload)
+        })
+  ))
+)
+
+export var epic = combineEpics(refreshTeamMembershipsEpic, refreshTeamRoomsEpic, refreshTeamByNameEpic);
 /** FUNCTIONS */
-function ajax$({state$, action$, options, success}) {
+function ajax$({state$, action$, options, success, error}) {
   return concat(
     of(request()),
     ajax({...options, headers: headers(state$.value)}).pipe(
       takeUntil(cancelEpic(action$)),
-      map((res) => success(res.data)),
+      switchMap((res) => success(res.response)),
       catchError((err) => {
-        console.error(err);
-        return of(error(pick(err, 'message', 'name', 'status', 'response')));
+        err = pick(err, 'message', 'name', 'status', 'response');
+        return from([
+          of(requestError(err)),
+          of(error(err))
+        ]);
       })
     ),
   )
@@ -79,6 +131,17 @@ function headers(state) {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
+}
+
+/**
+ * Encodes the data object into a valid uri query string.
+ * @param {object} data Query object data to encode.
+ */
+function encodeQueryData(data) {
+  const ret = [];
+  for (let d in data)
+    ret.push(encodeURIComponent(d) + '=' + encodeURIComponent(data[d]));
+  return ret.join('&');
 }
 /** DEFAULT EXPORT */
 export default slice.reducer;

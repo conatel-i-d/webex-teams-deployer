@@ -4,8 +4,16 @@ import { normalize, schema as normalizrSchema } from 'normalizr';
 import deepmerge from 'deepmerge';
 import { from } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
+import omit from 'lodash/omit';
 
 import { readCSVFiles, filesSelector } from './app.js';
+import { 
+  refreshTeamByName,
+  refreshTeamByNameSuccess,
+  refreshTeamByNameDone,
+  refreshTeamRoomsSuccess,
+  refreshTeamMembershipsSuccess
+} from './webex.js';
 
 var parse = require('csv-parse/lib/sync');
 
@@ -18,7 +26,7 @@ var coursesSchema = new normalizrSchema.Entity('courses', {}, {
   idAttribute: 'nombre_curso'
 });
 var membersSchema = new normalizrSchema.Entity('members', {}, {
-  idAttribute: (value) => `${value.nombre_curso}|${value.email}`
+  idAttribute: (value) => `${value.nombre_curso || value.name}|${value.email || value.personEmail}`
 });
 /** SLICE */
 var slice = createSlice({
@@ -30,7 +38,7 @@ var slice = createSlice({
   reducers: {
     merge(state, { payload }) {
       return deepmerge(state, payload.entities);
-    }
+    },
   }
 });
 /** ACTIONS */
@@ -51,7 +59,7 @@ export var itemsSelector = createSelector(
   )
 );
 /** EPICS */
-export var readCSVFilesEpic = (action$, state$) => action$.pipe(
+var readCSVFilesEpic = (action$, state$) => action$.pipe(
   ofType(readCSVFiles.toString()),
   switchMap(() => {
     var {
@@ -69,8 +77,58 @@ export var readCSVFilesEpic = (action$, state$) => action$.pipe(
     merge(normalize(readCSVFile(filePath, columns), [schema]))
   ))
 );
+
+var updateCourseOnRefreshTeamByNameEpic = action$ => action$.pipe(
+  ofType(refreshTeamByName.toString()),
+  map(({payload}) => merge(
+    normalize({
+      ...omit(payload, 'members'),
+      isRefreshing: true,
+      isVerified: false,
+    }, coursesSchema)
+  ))
+);
+
+var updateCourseOnRefreshSuccessEpic = action$ => action$.pipe(
+  ofType(
+    refreshTeamByNameSuccess.toString(),
+    refreshTeamRoomsSuccess.toString()
+  ),
+  map(({payload}) => merge(
+    normalize({
+      ...omit(payload, 'members'),
+    }, coursesSchema)
+  ))
+);
+
+var updateMembersOnRefreshSuccessEpic = action$ => action$.pipe(
+  ofType(refreshTeamMembershipsSuccess.toString()),
+  map(({payload}) => merge(
+    normalize(payload.members.map(member => ({
+      ...member,
+      nombre_curso: payload.nombre_curso
+    })), [membersSchema])
+  ))
+)
+
+var updateCourseOnRefreshTeamByNameDoneEpic = action$ => action$.pipe(
+  ofType(refreshTeamByNameDone.toString()),
+  map(({payload}) => merge(
+    normalize({
+      ...omit(payload, 'members', 'rooms'),
+      isRefreshing: false,
+      isVerified: true,
+    }, coursesSchema)
+  ))
+);
 /** EPICS EXPORT */
-export var epic = combineEpics(readCSVFilesEpic);
+export var epic = combineEpics(
+  updateCourseOnRefreshTeamByNameEpic,
+  updateCourseOnRefreshSuccessEpic,
+  updateCourseOnRefreshTeamByNameDoneEpic,
+  updateMembersOnRefreshSuccessEpic,
+  readCSVFilesEpic
+);
 /** FUNCTIONS */
 /**
  * Reads a CSV file and returns a list of the parsed rows as objects.
