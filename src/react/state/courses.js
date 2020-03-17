@@ -3,8 +3,9 @@ import { combineEpics, ofType } from 'redux-observable';
 import sortBy from 'lodash/sortBy';
 import find from 'lodash/find';
 import get from 'lodash/get';
+import set from 'lodash/set';
 import { of, concat, from } from 'rxjs';
-import { switchMap, map, mergeMap, takeUntil, catchError } from 'rxjs/operators';
+import { switchMap, map, mergeMap, takeUntil, catchError, delay } from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
 import deepmerge from 'deepmerge';
 const parse = require('csv-parse/lib/sync')
@@ -46,16 +47,20 @@ var slice = createSlice({
       state.names = payload.names;
     },
     requestError(state, { payload }) {
-      state.errorMessage = payload.message;
       state.flags = deepmerge(state.flags, payload.flags);
-      console.log(payload);
+      state.errorMessage = payload.message;
+    },
+    refreshCourseMemberId(state, { payload }) {
+      state.flags = deepmerge(state.flags, payload.flags);
+      var course = find(state.names, c => c.nombre_curso === payload.course.nombre_curso);
+      set(course, `members.${payload.data.personEmail}`, payload.data);
     }
   }
 });
 /**
  * CUSTOM ACTIONS
  */
-export var { setCourses, requestError, setFlags, refreshAllCoursesIds } = slice.actions;
+export var { refreshCourseMemberId, setCourses, requestError, setFlags, refreshAllCoursesIds } = slice.actions;
 export var loadCourses = createAction('courses/loadCourses');
 export var refresh = createAction('courses/refresh');
 export var refreshSuccess = createAction('courses/refresh/success');
@@ -64,6 +69,8 @@ export var refreshAllSuccess = createAction('courses/refreshAll/success');
 export var create = createAction('courses/create');
 export var createSuccess = createAction('courses/create/success');
 export var createRoomsSuccess = createAction('courses/createRooms/success');
+export var createTeamMembershipSuccess = createAction('courses/createMembership/success');
+export var createTeamMembershipsSuccess = createAction('courses/createMemberships/success');
 export var cancel = createAction('courses/cancel');
 /**
  * SELECTORS
@@ -117,8 +124,45 @@ var createEpic = (action$, state$) => action$.pipe(
   }),
 );
 
-var createRoomsEpic = (action$, state$) => action$.pipe(
+var createTeamMembershipsEpic = (action$, state$) => action$.pipe(
   ofType(createSuccess.toString()),
+  switchMap(({payload}) => {
+    return concat(
+      ...payload.members.map(member => {
+        return webexAjax({
+          state: state$.value,
+          entity: 'team/memberships',
+          method: 'POST',
+          body: {
+            personEmail: member.email,
+            teamId: payload.id,
+            isModerator: member.P !== undefined
+          },
+          success({ data }) {
+            return from([
+              refreshCourseMemberId({
+                course: payload,
+                data,
+                flags: { courses: { [payload.nombre_curso]: { members: { [member.email]: { create: false } } } } } 
+              }),
+              createTeamMembershipSuccess(data)
+            ]);
+          },
+          error: (error) => requestError({ 
+            ...error, 
+            flags: { courses: { [payload.nombre_curso]: { members: { [member.email]: { create: false } } } } }
+          }),
+          cancel: () => takeUntil(action$.pipe(ofType(cancel.toString()))),
+          request: () => setFlags({ flags: { courses: { [payload.nombre_curso]: { members: { [member.email]: { create: true } } } } } }),
+        }).pipe(delay(1000))
+      }), 
+      of(createTeamMembershipsSuccess(payload)
+    ))
+  })
+);
+
+var createRoomsEpic = (action$, state$) => action$.pipe(
+  ofType(createTeamMembershipsSuccess.toString()),
   switchMap(({payload}) => {
     return webexAjax({
       state: state$.value,
@@ -136,7 +180,15 @@ var createRoomsEpic = (action$, state$) => action$.pipe(
                 ? { ...course, rooms: [...get(course, 'rooms', []), data] }
                 : course;
             }),
-            flags: { courses: { [payload.name]: { rooms: { [PRIVATE_ROOM_TITLE]: false } } } } 
+            flags: { 
+              courses: { 
+                [payload.name]: { 
+                  rooms: { [PRIVATE_ROOM_TITLE]: false },
+                  create: false,
+                  verified: true,
+                },
+              } 
+            } 
           }),
           createRoomsSuccess()
         ]);
@@ -149,7 +201,7 @@ var createRoomsEpic = (action$, state$) => action$.pipe(
       request: () => setFlags({ flags: { courses: { [payload.name]: { rooms: { [PRIVATE_ROOM_TITLE]: true } } } } }),
     })
   })
-)
+);
 
 var loadCoursesEpic = (action$, state$) => action$.pipe(
   ofType(loadCourses.toString()),
@@ -165,7 +217,7 @@ var loadCoursesEpic = (action$, state$) => action$.pipe(
   })
 );
 
-export var epic = combineEpics(createRoomsEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
+export var epic = combineEpics(createTeamMembershipsEpic, createRoomsEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
 /**
  * FUNCTIONS
  */
@@ -198,9 +250,9 @@ function createAjax$(action$, state$, payload) {
               ? { ...course, id: data.id }
               : course;
           }),
-          flags: { courses: { [payload.nombre_curso]: { create: false, verified: true } } }
+          flags: {},
         }),
-        createSuccess(data)
+        createSuccess({ ...payload, ...data })
       ]);
     },
     error(error) {
@@ -317,7 +369,7 @@ function webexAjax({
       })),
       catchError((err) => {
         console.error(err);
-        return of(error(err));
+        return of(error({message: err.message}));
       })
     )
   );
