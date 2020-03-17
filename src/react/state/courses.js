@@ -68,9 +68,11 @@ export var refreshAll = createAction('courses/refreshAll');
 export var refreshAllSuccess = createAction('courses/refreshAll/success');
 export var create = createAction('courses/create');
 export var createSuccess = createAction('courses/create/success');
-export var createRoomsSuccess = createAction('courses/createRooms/success');
-export var createTeamMembershipSuccess = createAction('courses/createMembership/success');
-export var createTeamMembershipsSuccess = createAction('courses/createMemberships/success');
+export var createPrivateRoomSuccess = createAction('courses/createPrivateRoom/success');
+export var createTeamMembershipSuccess = createAction('courses/createTeamMembership/success');
+export var createTeamMembershipsSuccess = createAction('courses/createTeamMemberships/success');
+export var createTeamPrivateRoomMembershipSuccess = createAction('courses/createPrivateRoomMembership/success');
+export var createTeamPrivateRoomMembershipsSuccess = createAction('courses/createPrivateRoomMemberships/success');
 export var cancel = createAction('courses/cancel');
 /**
  * SELECTORS
@@ -161,7 +163,7 @@ var createTeamMembershipsEpic = (action$, state$) => action$.pipe(
   })
 );
 
-var createRoomsEpic = (action$, state$) => action$.pipe(
+var createPrivateRoomEpic = (action$, state$) => action$.pipe(
   ofType(createTeamMembershipsSuccess.toString()),
   switchMap(({payload}) => {
     return webexAjax({
@@ -190,7 +192,7 @@ var createRoomsEpic = (action$, state$) => action$.pipe(
               } 
             } 
           }),
-          createRoomsSuccess()
+          createPrivateRoomSuccess({...payload, privateRoom: data})
         ]);
       },
       error: (error) => requestError({ 
@@ -200,6 +202,53 @@ var createRoomsEpic = (action$, state$) => action$.pipe(
       cancel: () => takeUntil(action$.pipe(ofType(cancel.toString()))),
       request: () => setFlags({ flags: { courses: { [payload.name]: { rooms: { [PRIVATE_ROOM_TITLE]: true } } } } }),
     })
+  })
+);
+
+var createTeamPrivateRoomMembershipsEpic = (action$, state$) => action$.pipe(
+  ofType(createPrivateRoomSuccess.toString()),
+  switchMap(({payload}) => {
+    return concat(
+      ...payload.members.filter(m => m.P !== undefined).map(member => {
+        return webexAjax({
+          state: state$.value,
+          entity: 'memberships',
+          method: 'POST',
+          body: {
+            personEmail: member.email,
+            roomId: payload.privateRoom.id,
+            isModerator: false
+          },
+          success({ data }) {
+            return from([
+              refreshCourseMemberId({
+                course: payload,
+                data,
+                flags: { courses: { [payload.nombre_curso]: { members: { [member.email]: { create: false } } } } } 
+              }),
+              setFlags({
+                flags: { 
+                  courses: { 
+                    [payload.nombre_curso]: { 
+                      create: false,
+                      verified: true,
+                    },
+                  } 
+                }
+              }),
+              createTeamPrivateRoomMembershipSuccess(data)
+            ]);
+          },
+          error: (error) => requestError({ 
+            ...error, 
+            flags: { courses: { [payload.nombre_curso]: { members: { [member.email]: { create: false } } } } }
+          }),
+          cancel: () => takeUntil(action$.pipe(ofType(cancel.toString()))),
+          request: () => setFlags({ flags: { courses: { [payload.nombre_curso]: { members: { [member.email]: { create: true } } } } } }),
+        }).pipe(delay(1000))
+      }), 
+      of(createTeamPrivateRoomMembershipsSuccess(payload)
+    ))
   })
 );
 
@@ -217,7 +266,7 @@ var loadCoursesEpic = (action$, state$) => action$.pipe(
   })
 );
 
-export var epic = combineEpics(createTeamMembershipsEpic, createRoomsEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
+export var epic = combineEpics(createTeamPrivateRoomMembershipsEpic, createTeamMembershipsEpic, createPrivateRoomEpic, createEpic, refreshAllEpic, refreshEpic, loadCoursesEpic);
 /**
  * FUNCTIONS
  */
