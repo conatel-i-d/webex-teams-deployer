@@ -29,6 +29,7 @@ export var { requestError, request } = slice.actions;
 export var requestCancel = createAction('webex/request/cancel');
 export var requestDone = createAction('webex/request/done');
 export var requestChain = createAction('webex/request/chain');
+export var createAllTeams = createAction('webex/createAllTeams');
 export var createTeam = createAction('webex/createTeam');
 export var createTeamSuccess = createAction('webex/createTeamSuccess');
 export var createTeamDone = createAction('webex/createTeamDone');
@@ -41,9 +42,6 @@ export var createTeamPrivateRoomMembershipSuccess = createAction('webex/createTe
 export var createTeamPrivateRoomMembershipError = createAction('webex/createTeamPrivateRoomMembership/error');
 export var createTeamPrivateRoomMembershipsSuccess = createAction('webex/createTeamPrivateRoomMemberships/success');
 export var refreshAll = createAction('webex/refreshAll');
-export var refreshAllSuccess = createAction('webex/refreshAllSuccess');
-export var refreshAllDone = createAction('webex/refreshAllDone');
-export var refreshAllError = createAction('webex/refreshAllError');
 export var refreshTeamByName = createAction('webex/refreshTeamByName');
 export var refreshTeamByNameDone = createAction('webex/refreshTeamByName/done');
 export var refreshTeamByNameSuccess = createAction('webex/refreshTeamByName/success');
@@ -57,6 +55,20 @@ export var messageSelector = state => {
 }
 /** EPICS */
 var cancelEpic = action$ => action$.pipe(ofType(requestCancel.toString()));
+
+var createAllTeamsEpic = (action$) => action$.pipe(
+  ofType(createAllTeams.toString()),
+  switchMap(({payload}) => {
+    var courses = payload.filter(course => course.id === undefined);
+    var courses$ = from(courses);
+    var done$ = action$.pipe(
+      startWith(requestChain()),
+      ofType(requestChain.toString()),
+      take(courses.length)
+    );
+    return zip(courses$, done$).pipe(map(([course]) => createTeam(course)))
+  })
+);
 
 var createTeamEpic = (action$, state$) => action$.pipe(
   ofType(createTeam.toString()),
@@ -130,7 +142,8 @@ var createTeamPrivateRoomMembershipsEpic = (action$, state$) => action$.pipe(
             },
             success: () => from([
               createTeamPrivateRoomMembershipSuccess(),
-              createTeamDone(payload)
+              createTeamDone(payload),
+              requestChain(),
             ]),
             error: () => createTeamPrivateRoomMembershipError(member)
           })
@@ -150,11 +163,9 @@ var refreshAllEpic = (action$, state$) => action$.pipe(
       ofType(requestChain.toString()),
       take(courses.length)
     );
-    return zip(courses$, done$).pipe(
-      map(([course]) => refreshTeamByName(course))
-    )
+    return zip(courses$, done$).pipe(map(([course]) => refreshTeamByName(course)));
   })
-)
+);
 
 var refreshTeamByNameEpic = (action$, state$) => action$.pipe(
   ofType(refreshTeamByName.toString()),
@@ -221,6 +232,7 @@ var refreshTeamMembershipsEpic = (action$, state$) => action$.pipe(
 )
 
 export var epic = combineEpics(
+  createAllTeamsEpic,
   createTeamEpic,
   createTeamMembershipsEpic,
   createTeamPrivateRoomEpic,

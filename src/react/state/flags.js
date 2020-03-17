@@ -28,7 +28,7 @@ export var { update } = slice.actions;
 /** SELECTORS */
 export var isRefreshingSelector = state => state.flags.isRefreshing;
 export var isCreatingSelector = state => state.flags.isCreating;
-export var allVerified = state => state.flags.allVerified;
+export var allVerifiedSelector = state => state.flags.allVerified;
 /** EPICS */
 var updateOnRequestErrorOrCancelEpic = (action$, state$) => action$.pipe(
   ofType(
@@ -42,9 +42,11 @@ var updateOnRequestErrorOrCancelEpic = (action$, state$) => action$.pipe(
     return update(items.reduce((acc, item) => ({
       isRefreshing: acc.isRefreshing === true ? true : !!item.isRefreshing,
       isCreating: acc.isCreating === true ? true : !!item.isCreating,
+      allVerified: acc.isCreating === true ? true : !!item.isVerified,
     }), {
       isRefreshing: false,
       isCreating: false,
+      allVerified: false,
     }));
   })
 )
