@@ -1,8 +1,8 @@
 import { createSlice, createAction } from '@reduxjs/toolkit';
 import { ofType, combineEpics } from 'redux-observable';
-import { switchMap, map, takeUntil, catchError } from 'rxjs/operators';
+import { map, switchMap, take, takeUntil, catchError, startWith } from 'rxjs/operators';
 import { ajax } from 'rxjs/ajax';
-import { of, concat, from } from 'rxjs';
+import { of, concat, from, zip } from 'rxjs';
 import find from 'lodash/find';
 import pick from 'lodash/pick';
 import get from 'lodash/get';
@@ -28,6 +28,7 @@ var slice = createSlice({
 export var { requestError, request } = slice.actions;
 export var requestCancel = createAction('webex/request/cancel');
 export var requestDone = createAction('webex/request/done');
+export var requestChain = createAction('webex/request/chain');
 export var createTeam = createAction('webex/createTeam');
 export var createTeamSuccess = createAction('webex/createTeamSuccess');
 export var createTeamDone = createAction('webex/createTeamDone');
@@ -39,6 +40,10 @@ export var createTeamPrivateRoomError = createAction('webex/createTeamPrivateRoo
 export var createTeamPrivateRoomMembershipSuccess = createAction('webex/createTeamPrivateRoomMembership/success');
 export var createTeamPrivateRoomMembershipError = createAction('webex/createTeamPrivateRoomMembership/error');
 export var createTeamPrivateRoomMembershipsSuccess = createAction('webex/createTeamPrivateRoomMemberships/success');
+export var refreshAll = createAction('webex/refreshAll');
+export var refreshAllSuccess = createAction('webex/refreshAllSuccess');
+export var refreshAllDone = createAction('webex/refreshAllDone');
+export var refreshAllError = createAction('webex/refreshAllError');
 export var refreshTeamByName = createAction('webex/refreshTeamByName');
 export var refreshTeamByNameDone = createAction('webex/refreshTeamByName/done');
 export var refreshTeamByNameSuccess = createAction('webex/refreshTeamByName/success');
@@ -135,6 +140,22 @@ var createTeamPrivateRoomMembershipsEpic = (action$, state$) => action$.pipe(
   )
 );
 
+var refreshAllEpic = (action$, state$) => action$.pipe(
+  ofType(refreshAll.toString()),
+  switchMap(() => {
+    var courses = Object.values(state$.value.entities.courses);
+    var courses$ = from(courses);
+    var done$ = action$.pipe(
+      startWith(requestChain()),
+      ofType(requestChain.toString()),
+      take(courses.length)
+    );
+    return zip(courses$, done$).pipe(
+      map(([course]) => refreshTeamByName(course))
+    )
+  })
+)
+
 var refreshTeamByNameEpic = (action$, state$) => action$.pipe(
   ofType(refreshTeamByName.toString()),
   switchMap(({payload}) => (
@@ -190,7 +211,8 @@ var refreshTeamMembershipsEpic = (action$, state$) => action$.pipe(
             payload = {...payload, members: data.items };
             return from([
               refreshTeamMembershipsSuccess(payload),
-              refreshTeamByNameDone(payload)
+              refreshTeamByNameDone(payload),
+              requestChain()
             ])
           },
           error: () => refreshTeamByNameDone(payload)
@@ -205,7 +227,8 @@ export var epic = combineEpics(
   createTeamPrivateRoomMembershipsEpic,
   refreshTeamMembershipsEpic,
   refreshTeamRoomsEpic,
-  refreshTeamByNameEpic
+  refreshTeamByNameEpic,
+  refreshAllEpic
 );
 /** FUNCTIONS */
 function ajax$({state$, action$, options, success, error}) {

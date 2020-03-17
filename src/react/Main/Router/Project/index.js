@@ -7,10 +7,10 @@ import {
 } from '@chakra-ui/core'
 
 import Course from './Course.js';
-import { refreshAll, createAll, allVerifiedSelector } from '../../../state/courses.js';
+import { createAll, allVerifiedSelector } from '../../../state/courses.js';
 import { readCSVFiles } from '../../../state/app.js';
 import { itemsSelector } from '../../../state/entities.js';
-import { messageSelector } from '../../../state/webex.js';
+import { messageSelector, refreshAll } from '../../../state/webex.js';
 import { isRefreshingSelector, isCreatingSelector } from '../../../state/flags.js';
 
 function Project() {
@@ -49,7 +49,7 @@ function Project() {
   return (
     <Stack p="1em" spacing={8}>
       <Stack isInline>
-        <Button onClick={handleOnLoadCourses}>Cargar cursos</Button>
+        <Button isLoading={isRefreshing || isCreating} onClick={handleOnLoadCourses}>Cargar cursos</Button>
         <Button isLoading={isRefreshing} isDisabled={courses.length === 0 || isCreating} variantColor="blue" onClick={handleOnRefreshAllCourses}>Veríficar Cursos</Button>
         <Button isLoading={isCreating || isRefreshing} isDisabled={courses.length === 0 || allVerified === false} variantColor="orange" onClick={handleOnCreateAllCourses}>Crear Cursos</Button>
       </Stack>

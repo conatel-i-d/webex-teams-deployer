@@ -1,5 +1,5 @@
 import React from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import get from 'lodash/get';
 import {
   Box,
@@ -14,10 +14,14 @@ import { FaRetweet, FaPlus } from 'react-icons/fa';
 
 import Member from './Member.js';
 import { refreshTeamByName, createTeam } from '../../../state/webex.js';
+import { isRefreshingSelector, isCreatingSelector } from '../../../state/flags.js';
 
 function Course({course}) {
   var dispatch = useDispatch();
   var [isCollapseOpen, setIsCollapseOpen] = React.useState(false);
+
+  var isRefreshing = useSelector(isRefreshingSelector);
+  var isCreating = useSelector(isCreatingSelector);
 
   var toggleCollapse = React.useCallback(() => (
     setIsCollapseOpen(!isCollapseOpen)
@@ -49,8 +53,8 @@ function Course({course}) {
           {course.nombre_curso}
         </Heading>
         <Flex align="center">
-          <IconButton isDisabled={course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleRefresh} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="teal" icon={FaRetweet} />
-          <IconButton ml="0.5em" isDisabled={!course.isVerified || course.id !== undefined} isLoading={course.isRefreshing || course.isCreating} onClick={handleCreate} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="orange" icon={FaPlus} />
+          <IconButton isDisabled={course.id !== undefined} isLoading={isRefreshing || isCreating || course.isRefreshing || course.isCreating} onClick={handleRefresh} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="teal" icon={FaRetweet} />
+          <IconButton ml="0.5em" isDisabled={!course.isVerified || course.id !== undefined} isLoading={isRefreshing || isCreating || course.isRefreshing || course.isCreating} onClick={handleCreate} h="20px" w="20px" fontSize="16px" variant="outline" variantColor="orange" icon={FaPlus} />
         </Flex>
       </Flex>
       <Grid templateColumns="repeat(2, 1fr)" gap={1}>
