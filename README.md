@@ -3,6 +3,8 @@ Webex Teams Deployer
 
 Aplicación creada para automatizar la creación de "Teams" en Webex Teams.
 
+![Video](./video.gif)
+
 Configuración
 ---
 
