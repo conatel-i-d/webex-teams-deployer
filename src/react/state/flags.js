@@ -1,8 +1,9 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { ofType, combineEpics } from 'redux-observable';
-import { map } from 'rxjs/operators'; 
+import { map, mapTo } from 'rxjs/operators'; 
 
 import { itemsSelector } from './entities.js';
+import { readCSVFiles } from './app.js';
 import {
   request,
   requestError,
@@ -12,19 +13,18 @@ import {
 /** SLICE */
 var slice = createSlice({
   name: 'flags',
-  initialState: {
-    isRefreshing: false,
-    isCreating: false,
-    allVerified: false,
-  },
+  initialState: initialState(),
   reducers: {
     update(state, {payload}) {
       return {...state, ...payload}
+    },
+    reset() {
+      return initialState();
     }
   }
 });
 /** ACTIONS */
-export var { update } = slice.actions;
+export var { reset, update } = slice.actions;
 /** SELECTORS */
 export var isRefreshingSelector = state => state.flags.isRefreshing;
 export var isCreatingSelector = state => state.flags.isCreating;
@@ -49,10 +49,24 @@ var updateOnRequestErrorOrCancelEpic = (action$, state$) => action$.pipe(
       allVerified: false,
     }));
   })
-)
+);
+
+var updateOnreadCSVFilesEpic = (action$) => action$.pipe(
+  ofType(readCSVFiles.toString()),
+  mapTo(reset())
+);
 
 export var epic = combineEpics(
+  updateOnreadCSVFilesEpic,
   updateOnRequestErrorOrCancelEpic
 );
+/** FUNCTIONS */
+function initialState() {
+  return {
+    isCreating: false,
+    isRefreshing: false,
+    allVerified: false,
+  };
+}
 /** DEFAULT EXPORTS */
 export default slice.reducer;

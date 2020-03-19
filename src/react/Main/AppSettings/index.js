@@ -97,7 +97,7 @@ function AppSettings({bg="whitesmoke", full=true}) {
             Archivo donde se encuentra la lista de estudiantes por curso
           </FormHelperText>
         </FormControl>
-        <Button type="submit" disabled={settings.apiKey === '' || settings.folder === ''}>Guardar Configuración</Button>
+        <Button type="submit">Guardar Configuración</Button>
       </form>
     </Box>
   )
