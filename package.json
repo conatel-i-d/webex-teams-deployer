@@ -1,6 +1,6 @@
 {
   "name": "webex-teams-deployer",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "productName": "Webex Teams Deployer",
   "main": "electron/main.js",
