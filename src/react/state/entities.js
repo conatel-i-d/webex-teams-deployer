@@ -17,6 +17,8 @@ import {
   createTeam,
   createTeamSuccess,
   createTeamPrivateRoomSuccess,
+  createTeamMembership,
+  createTeamMembershipDone,
   createTeamMembershipSuccess,
   createTeamDone,
 } from './webex.js';
@@ -26,8 +28,8 @@ var parse = require('csv-parse/lib/sync');
 var { fs } = window;
 /** CONSTANTS */
 var COURSES_COLUMNS = ['nombre_curso'];
-var PROFESSORS_COLUMNS = ['nombre_curso', 'codigo_persona', 'primer_apellido', 'segundo_apellido', 'email', 'P'];
-var STUDENTS_COLUMNS = ['nombre_curso', 'codigo_persona', 'primer_apellido', 'segundo_apellido', 'email', 'A']
+var PROFESSORS_COLUMNS = ['nombre_curso', 'codigo_persona', 'primer_apellido', 'primer_nombre', 'email', 'P'];
+var STUDENTS_COLUMNS = ['nombre_curso', 'codigo_persona', 'primer_apellido', 'primer_nombre', 'email', 'A']
 var coursesSchema = new normalizrSchema.Entity('courses', {}, {
   idAttribute: 'nombre_curso'
 });
@@ -67,6 +69,13 @@ export var itemsSelector = createSelector(
       year: 2020,
       members: Object.values(members)
         .filter(member => member.codigo_persona !== undefined && member.nombre_curso === courseId)
+        .map(member => ({
+          isVerified: course.isVerified,
+          isRefreshing: course.isRefreshing,
+          isCreating: course.isCreating,
+          teamId: course.id,
+          ...member,
+        }))
     }))
   )
 );
@@ -100,6 +109,20 @@ var updateCourseOnCreateTeamEpic = action$ => action$.pipe(
   ))
 );
 
+var updateMemberOnCreateTeamMembershipEpic = action$ => action$.pipe(
+  ofType(createTeamMembership.toString()),
+  map(({payload}) => merge(
+    normalize({...payload, isCreating: true}, membersSchema)
+  ))
+);
+
+var updateMemberOnCreateTeamMembershipDoneEpic = action$ => action$.pipe(
+  ofType(createTeamMembershipDone.toString()),
+  map(({payload}) => merge(
+    normalize({...payload, isCreating: false}, membersSchema)
+  ))
+);
+
 var updateCourseOnCreateTeamSuccessEpic = action$ => action$.pipe(
   ofType(
     createTeamSuccess.toString(),
@@ -115,7 +138,7 @@ var updateCourseOnCreateTeamSuccessEpic = action$ => action$.pipe(
 var updateMembersOnCreateSuccessEpic = action$ => action$.pipe(
   ofType(createTeamMembershipSuccess.toString()),
   map(({payload}) => merge(
-    normalize(payload, membersSchema)
+    normalize({...payload, isCreating: false, isVerified: true}, membersSchema)
   ))
 )
 
@@ -176,6 +199,8 @@ var updateCourseOnRefreshTeamByNameDoneEpic = action$ => action$.pipe(
 );
 /** EPICS EXPORT */
 export var epic = combineEpics(
+  updateMemberOnCreateTeamMembershipEpic,
+  updateMemberOnCreateTeamMembershipDoneEpic,
   updateCourseOnRefreshTeamByNameEpic,
   updateCourseOnRefreshSuccessEpic,
   updateCourseOnRefreshTeamByNameDoneEpic,
@@ -193,10 +218,16 @@ export var epic = combineEpics(
  * @param {string[]} columns List of columns to parse.
  */
 function readCSVFile(filePath, columns) {
-  return parse(fs.readFileSync(filePath), {
-    columns,
-    skip_empty_lines: true
-  });
+  var result = [];
+  try {
+    result = parse(fs.readFileSync(filePath), {
+      columns,
+      skip_empty_lines: true
+    });
+  } catch (e) {
+    console.error(e);
+  }
+  return result;
 }
 /** DEFAULT EXPORTS */
 export default slice.reducer;

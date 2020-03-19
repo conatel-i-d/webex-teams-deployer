@@ -9,7 +9,7 @@ import {
   Box,
   useToast,
 } from '@chakra-ui/core';
-import { FaFolderOpen, FaFileAlt } from 'react-icons/fa';
+import { FaFileAlt } from 'react-icons/fa';
 import { useDispatch, useSelector } from 'react-redux';
 import { setApp, settingsSelector } from '../../state/app.js';
 
@@ -37,17 +37,6 @@ function AppSettings({bg="whitesmoke", full=true}) {
     setSettings({ ...settings, apiKey: e.target.value });
   }, [settings, setSettings]);
 
-  var handleFolderChange = React.useCallback(() => {
-    var selectedFolders = dialog.showOpenDialogSync({
-      title: 'Seleccionar carpeta con archivos CSV',
-      buttonLabel: 'Seleccionar carpeta',
-      properties: ['openDirectory', 'createDirectory']
-    });
-    if (selectedFolders === undefined || selectedFolders.length === 0) return;
-    var selectedFolder = selectedFolders[0];
-    setSettings({ ...settings, folder: selectedFolder });
-  }, [setSettings, settings]);
-
   var handleFileChange = React.useCallback((key) => () => {
     var selectedFiles = dialog.showOpenDialogSync({
       title: 'Seleccionar archivo CSV',
@@ -67,19 +56,6 @@ function AppSettings({bg="whitesmoke", full=true}) {
           <Input type="apiKey" value={settings.apiKey} id="apiKey" aria-describedby="apiKey-helper-text" onChange={handleApiKeyChange} />
           <FormHelperText id="apiKey-helper-text">
             La API de Webex Teams se puede obtener en la página de <a href="https://developer.webex.com/docs/api/getting-started">Cisco Webex for Developers</a>.
-          </FormHelperText>
-        </FormControl>
-        <FormControl>
-          <FormLabel htmlFor="folder">Carpeta del proyecto</FormLabel>
-          <Flex>
-            <Input readOnly roundedRight="0" type="folder" value={settings.folder} id="folder" aria-describedby="folder-helper-text" />
-            <Button width="300px" variant="solid" roundedLeft="0" onClick={handleFolderChange}>
-              <Box as={FaFolderOpen} mr="0.5em" />
-              Seleccionar Carpeta
-            </Button>
-          </Flex>
-          <FormHelperText id="folder-helper-text">
-            Carpeta donde se encuentran los archivos CSV correspondiente a los cursos.
           </FormHelperText>
         </FormControl>
         <FormControl>

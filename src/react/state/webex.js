@@ -30,6 +30,8 @@ export var requestCancel = createAction('webex/request/cancel');
 export var requestDone = createAction('webex/request/done');
 export var requestChain = createAction('webex/request/chain');
 export var createAllTeams = createAction('webex/createAllTeams');
+export var createTeamMembership = createAction('webex/createTeamMembership');
+export var createTeamMembershipDone = createAction('webex/createTeamMembership/done');
 export var createTeam = createAction('webex/createTeam');
 export var createTeamSuccess = createAction('webex/createTeamSuccess');
 export var createTeamDone = createAction('webex/createTeamDone');
@@ -67,6 +69,26 @@ var createAllTeamsEpic = (action$) => action$.pipe(
       take(courses.length)
     );
     return zip(courses$, done$).pipe(map(([course]) => createTeam(course)))
+  })
+);
+
+var createTeamMembershipEpic = (action$, state$) => action$.pipe(
+  ofType(createTeamMembership.toString()),
+  switchMap(({payload}) => {
+    if (payload.id !== undefined || payload.isVerified === false) return of({type: null});
+    return ajax$({ action$, state$,
+      options: {
+        url: `${API}/team/memberships`,
+        method: POST,
+        body: {
+          teamId: payload.teamId,
+          personEmail: payload.email,
+          isModerator: payload.P !== undefined
+        }
+      },
+      success: (data) => of(createTeamMembershipSuccess({...payload, ...data})),
+      error: () => createTeamMembershipDone(payload)
+    })
   })
 );
 
@@ -240,6 +262,7 @@ var requestChainEpic = action$ => action$.pipe(
 export var epic = combineEpics(
   createAllTeamsEpic,
   createTeamEpic,
+  createTeamMembershipEpic,
   createTeamMembershipsEpic,
   createTeamPrivateRoomEpic,
   createTeamPrivateRoomMembershipsEpic,

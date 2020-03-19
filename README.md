@@ -27,7 +27,7 @@ El formato de cada uno de estos archivos es el siguiente:
 - `nombre_curso`: Nombre del curso al cual hace referencia.
 - `codigo_persona`: Identificador único de la persona.
 - `primer_apellido`: Nombre o primer apellido de la persona.
-- `segundo_apellido`: Segundo o primer apellido de la persona.
+- `primer_nombre`: Segundo o primer apellido de la persona.
 
 Todos estos pasos los hacemos dentro de la pestaña `Configuración`. No olvide grabar los cambios antes de salir de la pestaña.
 
